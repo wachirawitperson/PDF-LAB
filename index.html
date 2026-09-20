@@ -246,15 +246,6 @@
                       </svg>
                       <span class="mega-tool-name">บีบอัด PDF</span>
                     </button>
-                    <button type="button" class="mega-tool-item" data-tool-id="compress-image">
-                      <svg class="mega-tool-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <polyline points="21 15 16 10 5 21"/>
-                        <polyline points="16 7 12 11 8 7"/>
-                      </svg>
-                      <span class="mega-tool-name">บีบอัดรูปภาพ</span>
-                    </button>
                   </div>
                 </div>
 
@@ -1383,22 +1374,14 @@
                 </div>
               </div>
 
-              <!-- Mode Selection -->
-              <div class="setting-group">
-                <label class="setting-label">โหมดการประมวลผล:</label>
-                <div class="segment-group">
-                  <label class="segment-btn active">
-                    <input type="radio" name="compressPdfMode" value="smart" checked>
-                    <span>บีบอัดอัจฉริยะ (Smart)</span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="compressPdfMode" value="lossless">
-                    <span>โครงสร้างเท่านั้น (Lossless)</span>
-                  </label>
-                </div>
-                <div class="callout-note" id="compressPdfModeNotice">
-                  ℹ️ โหมดบีบอัดอัจฉริยะจะปรับลดขนาดรูปภาพในเอกสาร เหมาะกับเอกสารสแกนและใบงานเพื่อให้ไฟล์เล็กลงมากที่สุด
-                </div>
+              <!-- Small Size Warning Banner -->
+              <div class="warning-callout-card hidden" id="compressPdfSmallWarning">
+                ⚠️ <strong>ข้อควรระวังสำหรับขนาดเล็ก:</strong> การลดความละเอียดลงเหลือ 90 DPI อาจทำให้ตัวหนังสือขนาดเล็กหรือเส้นบางๆ เบลอหรือไม่คมชัด
+              </div>
+
+              <!-- Local Image Recompression Disclosure -->
+              <div class="callout-note" id="compressPdfRasterNotice">
+                ℹ️ <strong>การประมวลผล:</strong> ระบบใช้การบีบอัดภาพเอกสารภายในเครื่อง (Local Image Recompression) เพื่อลดขนาดไฟล์ หน้าเอกสารจะถูกแปลงเป็นภาพความละเอียดตามระดับที่เลือก ข้อความเดิมอาจไม่สามารถไฮไลต์หรือค้นหาได้
               </div>
 
               <!-- Action Button -->

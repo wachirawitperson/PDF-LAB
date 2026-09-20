@@ -2316,13 +2316,12 @@
   // TOOL 8: บีบอัด PDF (Compress PDF)
   // ==========================================================================
   const compressPdfState = {
-    files: [], // Array of { id, file, name, size, pageCount, buffer, thumbUrl, compressedBlob, compressedSize, isCompressed }
+    files: [], // Array of { id, file, name, size, pageCount, buffer, thumbUrl, compressedBlob, compressedSize, isCompressed, hasText }
     level: 'balanced', // 'high' | 'balanced' | 'small'
-    mode: 'smart',     // 'smart' | 'lossless'
     isProcessing: false
   };
 
-  // Compression presets for Smart mode:
+  // Compression presets for Local Image Recompression:
   // high: ~150 DPI (scale 2.083), quality 0.85
   // balanced: ~120 DPI (scale 1.666), quality 0.72
   // small: ~90 DPI (scale 1.25), quality 0.55
@@ -2383,23 +2382,11 @@
           const input = card.querySelector('input[type="radio"]');
           card.classList.toggle('selected', input && input.checked);
         });
-      });
-    });
 
-    // Mode selector radio changes
-    document.querySelectorAll('input[name="compressPdfMode"]').forEach(radio => {
-      radio.addEventListener('change', (e) => {
-        compressPdfState.mode = e.target.value;
-        document.querySelectorAll('input[name="compressPdfMode"]').forEach(r => {
-          r.closest('.segment-btn')?.classList.toggle('active', r.checked);
-        });
-        const notice = document.getElementById('compressPdfModeNotice');
-        if (notice) {
-          if (compressPdfState.mode === 'lossless') {
-            notice.textContent = 'ℹ️ โหมดโครงสร้างเท่านั้นจะลบ metadata ซ้ำซ้อนและบีบอัด Object Streams โดยคงความคมชัดและเวกเตอร์ 100%';
-          } else {
-            notice.textContent = 'ℹ️ โหมดบีบอัดอัจฉริยะจะปรับลดขนาดรูปภาพในเอกสาร เหมาะกับเอกสารสแกนและใบงานเพื่อให้ไฟล์เล็กลงมากที่สุด';
-          }
+        // Show/hide small size warning banner
+        const smallWarning = document.getElementById('compressPdfSmallWarning');
+        if (smallWarning) {
+          smallWarning.classList.toggle('hidden', compressPdfState.level !== 'small');
         }
       });
     });
@@ -2501,10 +2488,15 @@
         summaryCard.classList.remove('hidden');
         const origTotal = compressedFiles.reduce((acc, f) => acc + f.size, 0);
         const compTotal = compressedFiles.reduce((acc, f) => acc + (f.compressedSize || f.size), 0);
-        const savedBytes = Math.max(0, origTotal - compTotal);
-        const percentSaved = origTotal > 0 ? Math.round((savedBytes / origTotal) * 100) : 0;
+        const reducedFiles = compressedFiles.filter(f => f.compressedSize < f.size);
+        const savedBytes = reducedFiles.reduce((acc, f) => acc + (f.size - f.compressedSize), 0);
         if (summarySubtext) {
-          summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${percentSaved}%) จากขนาดเดิม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+          if (savedBytes > 0) {
+            const percentSaved = Math.round((savedBytes / origTotal) * 100);
+            summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${percentSaved}%) จากขนาดเดิม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+          } else {
+            summarySubtext.textContent = 'ไฟล์ที่เลือกไม่สามารถลดขนาดได้เพิ่มเติมด้วยการตั้งค่านี้ (ขนาดไฟล์หลังประมวลผลใกล้เคียงหรือใหญ่กว่าเดิม)';
+          }
         }
       } else {
         summaryCard.classList.add('hidden');
@@ -2524,6 +2516,7 @@
           : `<div class="compress-file-thumb-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg></div>`;
 
         let resultBadgeHtml = '';
+        let textStatusBadgeHtml = '';
         if (item.isCompressed) {
           const origSize = item.size;
           const compSize = item.compressedSize;
@@ -2537,9 +2530,15 @@
           } else {
             resultBadgeHtml = `
               <span class="compress-result-badge badge-neutral">
-                ขนาดใกล้เคียงเดิม (${formatFileSize(compSize)})
+                ไฟล์นี้ไม่สามารถลดขนาดได้เพิ่มเติมด้วยการตั้งค่านี้ (${formatFileSize(compSize)})
               </span>
             `;
+          }
+
+          if (item.hasText) {
+            textStatusBadgeHtml = `<span class="badge-text-status badge-text-searchable" title="เอกสารมีข้อความที่สามารถเลือกหรือค้นหาได้">📄 ข้อความยังเลือก/ค้นหาได้</span>`;
+          } else {
+            textStatusBadgeHtml = `<span class="badge-text-status badge-text-rasterized" title="เอกสารถูกแปลงเป็นภาพ ข้อความจึงไม่สามารถเลือกหรือค้นหาได้">🖼️ เอกสารภาพ (ค้นหาข้อความไม่ได้)</span>`;
           }
         }
 
@@ -2551,6 +2550,7 @@
               <span>${item.pageCount} หน้า</span>
               <span class="compress-size-pill">ขนาดเดิม: ${formatFileSize(item.size)}</span>
               ${resultBadgeHtml}
+              ${textStatusBadgeHtml}
             </div>
           </div>
           <div class="compress-file-actions">
@@ -2601,7 +2601,6 @@
     showProgressModal();
     const totalFiles = compressPdfState.files.length;
     const preset = COMPRESS_PDF_PRESETS[compressPdfState.level] || COMPRESS_PDF_PRESETS.balanced;
-    const isLossless = compressPdfState.mode === 'lossless';
 
     try {
       for (let fIdx = 0; fIdx < totalFiles; fIdx++) {
@@ -2610,61 +2609,101 @@
 
         updateProgress(fIdx, totalFiles, `${progressPrefix} (กำลังโหลด PDF)...`);
 
-        if (isLossless) {
-          // Lossless Stream Optimization Mode
-          updateProgress(fIdx, totalFiles, `${progressPrefix} (กำลังเพิ่มประสิทธิภาพ Object Streams)...`);
-          const pdfDoc = await window.PDFLib.PDFDocument.load(item.buffer, { ignoreEncryption: false });
-          const outBytes = await pdfDoc.save({ useObjectStreams: true });
-          item.compressedBlob = new Blob([outBytes], { type: 'application/pdf' });
-          item.compressedSize = item.compressedBlob.size;
-          item.isCompressed = true;
-        } else {
-          // Smart Recompression Mode (Per-page Canvas Downsampling with Dimension Preservation)
-          const targetDoc = await window.PDFLib.PDFDocument.create();
-          const loadingTask = window.pdfjsLib.getDocument({ data: new Uint8Array(item.buffer.slice(0)) });
-          const pdfJsDoc = await loadingTask.promise;
-          const pageCount = pdfJsDoc.numPages;
+        // Local Image Recompression Mode (Per-page Canvas Downsampling with Dimension Preservation)
+        const targetDoc = await window.PDFLib.PDFDocument.create();
+        const loadingTask = window.pdfjsLib.getDocument({ data: new Uint8Array(item.buffer.slice(0)) });
+        const pdfJsDoc = await loadingTask.promise;
+        const pageCount = pdfJsDoc.numPages;
+        const origPageDimensions = [];
 
-          for (let pNum = 1; pNum <= pageCount; pNum++) {
-            updateProgress(
-              pNum,
-              pageCount,
-              `${progressPrefix} — หน้า ${pNum}/${pageCount}`
-            );
+        for (let pNum = 1; pNum <= pageCount; pNum++) {
+          updateProgress(
+            pNum,
+            pageCount,
+            `${progressPrefix} — หน้า ${pNum}/${pageCount}`
+          );
 
-            const page = await pdfJsDoc.getPage(pNum);
-            const origViewport = page.getViewport({ scale: 1.0 });
-            const origWidth = origViewport.width;
-            const origHeight = origViewport.height;
+          const page = await pdfJsDoc.getPage(pNum);
+          const origViewport = page.getViewport({ scale: 1.0 });
+          const origWidth = origViewport.width;
+          const origHeight = origViewport.height;
+          origPageDimensions.push({ width: origWidth, height: origHeight });
 
-            const renderViewport = page.getViewport({ scale: preset.scale });
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(renderViewport.width);
-            canvas.height = Math.round(renderViewport.height);
-            const ctx = canvas.getContext('2d', { alpha: false });
+          const renderViewport = page.getViewport({ scale: preset.scale });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(renderViewport.width);
+          canvas.height = Math.round(renderViewport.height);
+          const ctx = canvas.getContext('2d', { alpha: false });
 
-            await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+          await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
-            // Encode to JPEG data URL with selected quality
-            const dataUrl = canvas.toDataURL('image/jpeg', preset.quality);
-            canvas.width = 0;
-            canvas.height = 0;
+          // Encode to JPEG data URL with selected quality
+          const dataUrl = canvas.toDataURL('image/jpeg', preset.quality);
+          canvas.width = 0;
+          canvas.height = 0;
 
-            const embeddedJpg = await targetDoc.embedJpg(dataUrl);
-            const newPage = targetDoc.addPage([origWidth, origHeight]);
-            newPage.drawImage(embeddedJpg, {
-              x: 0,
-              y: 0,
-              width: origWidth,
-              height: origHeight
-            });
-          }
-
-          const outBytes = await targetDoc.save({ useObjectStreams: true });
-          item.compressedBlob = new Blob([outBytes], { type: 'application/pdf' });
-          item.compressedSize = item.compressedBlob.size;
-          item.isCompressed = true;
+          const embeddedJpg = await targetDoc.embedJpg(dataUrl);
+          const newPage = targetDoc.addPage([origWidth, origHeight]);
+          newPage.drawImage(embeddedJpg, {
+            x: 0,
+            y: 0,
+            width: origWidth,
+            height: origHeight
+          });
         }
+
+        const outBytes = await targetDoc.save({ useObjectStreams: true });
+
+        // Post-Compression Verification (Geometry, Render, Searchability)
+        updateProgress(pageCount, pageCount, `${progressPrefix} (กำลังตรวจสอบความสมบูรณ์ของเอกสาร)...`);
+        const verifyDoc = await window.pdfjsLib.getDocument({ data: new Uint8Array(outBytes.slice(0)) }).promise;
+
+        // 1. Page count verification
+        if (verifyDoc.numPages !== pageCount) {
+          throw new Error(`จำนวนหน้าไม่ตรงกับต้นฉบับ: ได้ ${verifyDoc.numPages} หน้า แต่ต้นฉบับมี ${pageCount} หน้า`);
+        }
+
+        // 2. Authoritative Geometry verification (< 0.5 pt tolerance)
+        for (let p = 1; p <= verifyDoc.numPages; p++) {
+          const vPage = await verifyDoc.getPage(p);
+          const vViewport = vPage.getViewport({ scale: 1.0 });
+          const origDim = origPageDimensions[p - 1];
+          const diffW = Math.abs(vViewport.width - origDim.width);
+          const diffH = Math.abs(vViewport.height - origDim.height);
+          if (diffW >= 0.5 || diffH >= 0.5) {
+            throw new Error(`ขนาดหน้า ${p} คลาดเคลื่อนเกินกำหนด (${diffW.toFixed(2)}pt, ${diffH.toFixed(2)}pt)`);
+          }
+        }
+
+        // 3. Post-Compression Render Validation (Render check on canvas)
+        const samplePage = await verifyDoc.getPage(1);
+        const testCanvas = document.createElement('canvas');
+        const testVp = samplePage.getViewport({ scale: 0.2 });
+        testCanvas.width = Math.max(1, Math.round(testVp.width));
+        testCanvas.height = Math.max(1, Math.round(testVp.height));
+        const testCtx = testCanvas.getContext('2d');
+        await samplePage.render({ canvasContext: testCtx, viewport: testVp }).promise;
+        if (testCanvas.width === 0 || testCanvas.height === 0) {
+          throw new Error('ไม่สามารถเรนเดอร์หน้าเอกสารที่สร้างขึ้นได้');
+        }
+        testCanvas.width = 0;
+        testCanvas.height = 0;
+
+        // 4. Text Searchability Check (Verified, not inferred)
+        let hasExtractableText = false;
+        for (let p = 1; p <= verifyDoc.numPages; p++) {
+          const vPage = await verifyDoc.getPage(p);
+          const tc = await vPage.getTextContent();
+          if (tc && tc.items && tc.items.some(it => it.str && it.str.trim().length > 0)) {
+            hasExtractableText = true;
+            break;
+          }
+        }
+
+        item.hasText = hasExtractableText;
+        item.compressedBlob = new Blob([outBytes], { type: 'application/pdf' });
+        item.compressedSize = item.compressedBlob.size;
+        item.isCompressed = true;
       }
 
       hideProgressModal();

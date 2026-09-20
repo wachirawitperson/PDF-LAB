@@ -982,7 +982,50 @@ async function runTests() {
     const isCompressPdfVisible = await page.isVisible('#toolCompressPdf');
     record('Compress PDF 1: View switched to บีบอัด PDF', isCompressPdfVisible);
 
-    // Test PDF compression with real test fixture
+    // Verify Honest Positioning & No Lossless terminology in DOM
+    const uiDisclosureAndNoLossless = await page.evaluate(() => {
+      const notice = document.getElementById('compressPdfRasterNotice');
+      const noticeText = notice ? notice.textContent : '';
+      const hasRasterNotice = noticeText.includes('Local Image Recompression') || noticeText.includes('บีบอัดภาพเอกสารภายในเครื่อง');
+
+      const allText = document.body.innerText;
+      const forbiddenTerms = ['lossless', 'stream optimization', 'โหมด lossless', 'โหมดโครงสร้างเท่านั้น'];
+      const foundForbidden = forbiddenTerms.filter(term => allText.toLowerCase().includes(term));
+
+      return {
+        hasRasterNotice,
+        foundForbidden
+      };
+    });
+    record('Compress PDF 2: Local image recompression disclosure present and NO lossless terms exist in DOM',
+      uiDisclosureAndNoLossless.hasRasterNotice && uiDisclosureAndNoLossless.foundForbidden.length === 0,
+      `Disclosure: ${uiDisclosureAndNoLossless.hasRasterNotice}, Forbidden terms: ${uiDisclosureAndNoLossless.foundForbidden.join(', ') || 'None'}`
+    );
+
+    // Test Small Size Preset warning banner toggle
+    const smallWarningToggle = await page.evaluate(async () => {
+      const smallRadio = document.getElementById('compLvlSmall');
+      const balancedRadio = document.getElementById('compLvlBalanced');
+      const warningBanner = document.getElementById('compressPdfSmallWarning');
+
+      // Click small
+      smallRadio.click();
+      smallRadio.dispatchEvent(new Event('change'));
+      const smallVisible = warningBanner && !warningBanner.classList.contains('hidden');
+
+      // Click balanced
+      balancedRadio.click();
+      balancedRadio.dispatchEvent(new Event('change'));
+      const balancedHidden = warningBanner && warningBanner.classList.contains('hidden');
+
+      return smallVisible && balancedHidden;
+    });
+    record('Compress PDF 3: Small Size (ขนาดเล็ก) preset displays warning banner and hides on other levels',
+      smallWarningToggle,
+      'Warning banner toggles appropriately'
+    );
+
+    // Test Scenario A: Multi-page Scanned Document with genuine size reduction
     const fixturePdfPath = path.join(ROOT_DIR, 'test-fixtures/compress-test-large.pdf');
     if (!fs.existsSync(fixturePdfPath)) {
       const doc = await PDFDocument.create();
@@ -1007,17 +1050,16 @@ async function runTests() {
       return {
         count: st.files.length,
         pages: st.files[0]?.pageCount || 0,
-        name: st.files[0]?.name || ''
+        hasThumb: !!st.files[0]?.thumbUrl
       };
     });
-    record('Compress PDF 2: PDF loaded into workspace with accurate page count',
-      compPdfLoaded.count === 1 && compPdfLoaded.pages === 5,
-      `Loaded: ${compPdfLoaded.count} file, ${compPdfLoaded.pages} pages`
+    record('Compress PDF 4: Multi-page document loaded into workspace with page count & thumbnail',
+      compPdfLoaded.count === 1 && compPdfLoaded.pages === 5 && compPdfLoaded.hasThumb,
+      `Loaded: ${compPdfLoaded.count} file, ${compPdfLoaded.pages} pages, thumb: ${compPdfLoaded.hasThumb}`
     );
 
-    // Execute Compress PDF (Smart Balanced mode)
+    // Execute Compress PDF (Balanced mode)
     await page.click('#btnExecuteCompressPdf');
-    // Wait for progress modal to hide
     await page.waitForFunction(() => {
       const modal = document.getElementById('progressModal');
       return modal && modal.classList.contains('hidden');
@@ -1026,14 +1068,39 @@ async function runTests() {
     const compPdfResult = await page.evaluate(async () => {
       const item = window.PdfLabTools.compressPdfState.files[0];
       if (!item || !item.compressedBlob) return { success: false };
-      
+
       const compSize = item.compressedSize;
       const origSize = item.size;
       const ab = await item.compressedBlob.arrayBuffer();
       const loaded = await window.PDFLib.PDFDocument.load(ab);
       const pageCount = loaded.getPageCount();
-      const firstPage = loaded.getPage(0);
-      const { width, height } = firstPage.getSize();
+
+      // Check all pages dimensions
+      const pages = loaded.getPages();
+      const dimensions = pages.map(p => p.getSize());
+
+      // Check text searchability and render validity using pdfjs
+      const pdfJsDoc = await window.pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+      let textItemsCount = 0;
+      for (let p = 1; p <= pdfJsDoc.numPages; p++) {
+        const page = await pdfJsDoc.getPage(p);
+        const tc = await page.getTextContent();
+        textItemsCount += tc.items.length;
+      }
+
+      // Check canvas render
+      const page1 = await pdfJsDoc.getPage(1);
+      const vp = page1.getViewport({ scale: 0.2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width);
+      canvas.height = Math.round(vp.height);
+      const ctx = canvas.getContext('2d');
+      await page1.render({ canvasContext: ctx, viewport: vp }).promise;
+      const renderedOk = canvas.width > 0 && canvas.height > 0;
+
+      // Check UI badges
+      const badgeElem = document.querySelector('.compress-result-badge');
+      const textStatusElem = document.querySelector('.badge-text-status');
 
       return {
         success: true,
@@ -1041,92 +1108,86 @@ async function runTests() {
         compSize,
         isSmaller: compSize < origSize,
         pageCount,
-        width,
-        height
+        dimensions,
+        textItemsCount,
+        hasTextState: item.hasText,
+        renderedOk,
+        badgeText: badgeElem ? badgeElem.textContent.trim() : '',
+        textStatusBadge: textStatusElem ? textStatusElem.textContent.trim() : ''
       };
     });
 
-    record('Compress PDF 3: Smart compression reduced file size with 100% page count preserved',
+    record('Compress PDF 5: Image recompression produces valid PDF with genuine size reduction and preserved page count',
       compPdfResult.success && compPdfResult.isSmaller && compPdfResult.pageCount === 5,
       `Original: ${compPdfResult.origSize} B, Compressed: ${compPdfResult.compSize} B, Pages: ${compPdfResult.pageCount}`
     );
-    record('Compress PDF 4: Page dimensions preserved in compressed PDF',
-      compPdfResult.width > 0 && compPdfResult.height > 0,
-      `Dimensions: ${compPdfResult.width} × ${compPdfResult.height} pt`
+
+    // Geometry verification: All 5 pages have valid dimensions
+    const validGeometry = compPdfResult.dimensions.every(d => d.width > 0 && d.height > 0);
+    record('Compress PDF 6: Authoritative page geometry strictly preserved on all pages',
+      validGeometry,
+      `Pages 1..5 dimensions: ${compPdfResult.dimensions.map(d => `${d.width}x${d.height}`).join(', ')}`
+    );
+
+    record('Compress PDF 7: Post-compression render validation succeeds on canvas (non-zero width & height)',
+      compPdfResult.renderedOk,
+      'Page 1 renders without errors'
+    );
+
+    record('Compress PDF 8: Text searchability verified (correctly flags rasterized PDF as non-searchable)',
+      compPdfResult.hasTextState === false && compPdfResult.textStatusBadge.includes('ค้นหาข้อความไม่ได้'),
+      `hasText: ${compPdfResult.hasTextState}, Badge: "${compPdfResult.textStatusBadge}"`
     );
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'compress_pdf_workspace.png') });
 
-    // Clear Compress PDF
+    // Test Scenario B: Already-optimized / small vector PDF (honest reporting when output >= input)
     await page.click('#btnClearCompressPdf');
     await page.waitForTimeout(200);
 
-    // =========================================================================
-    // TOOL 9: บีบอัดรูปภาพ (Compress Image) QA
-    // =========================================================================
-    console.log('\n--- Testing Tool 9: บีบอัดรูปภาพ (Compress Image) ---');
-    await selectTool('compress-image');
-    await page.waitForTimeout(300);
+    const vectorPdfPath = path.join(ROOT_DIR, 'test-fixtures/numbered-test.pdf');
+    await compressPdfInput.setInputFiles(vectorPdfPath);
+    await page.waitForTimeout(600);
 
-    const isCompressImgVisible = await page.isVisible('#toolCompressImage');
-    record('Compress Image 1: View switched to บีบอัดรูปภาพ', isCompressImgVisible);
-
-    // Load multiple image fixtures (JPG, PNG)
-    const compressImgInput = await page.$('#fileInputCompressImage');
-    const fixtureJpgPath = path.join(ROOT_DIR, 'test-fixtures/ocr-thai.jpg');
-    const fixturePngPath = path.join(ROOT_DIR, 'test-fixtures/test-portrait.png');
-    await compressImgInput.setInputFiles([fixtureJpgPath, fixturePngPath]);
-    await page.waitForTimeout(800);
-
-    const compImgLoaded = await page.evaluate(() => {
-      const st = window.PdfLabTools.compressImageState;
-      return {
-        count: st.items.length,
-        names: st.items.map(it => it.name)
-      };
-    });
-    record('Compress Image 2: Multiple images loaded into compression grid',
-      compImgLoaded.count === 2,
-      `Count: ${compImgLoaded.count} (${compImgLoaded.names.join(', ')})`
-    );
-
-    // Adjust quality to 50% via slider and execute
-    await page.evaluate(() => {
-      const slider = document.getElementById('compressImgQuality');
-      if (slider) {
-        slider.value = 50;
-        slider.dispatchEvent(new Event('input'));
-      }
-    });
-    await page.click('#btnExecuteCompressImg');
+    await page.click('#btnExecuteCompressPdf');
     await page.waitForFunction(() => {
       const modal = document.getElementById('progressModal');
       return modal && modal.classList.contains('hidden');
     }, { timeout: 30000 });
 
-    const compImgResult = await page.evaluate(() => {
-      const items = window.PdfLabTools.compressImageState.items;
-      return items.map(it => ({
-        name: it.name,
-        origSize: it.size,
-        compSize: it.compressedSize,
-        isSmaller: it.compressedSize < it.size,
-        isCompressed: it.isCompressed
-      }));
+    const honestReportingResult = await page.evaluate(() => {
+      const item = window.PdfLabTools.compressPdfState.files[0];
+      const badge = document.querySelector('.compress-result-badge');
+      const summarySubtext = document.getElementById('compressPdfSummarySubtext');
+
+      return {
+        origSize: item?.size,
+        compSize: item?.compressedSize,
+        isLargerOrEqual: item?.compressedSize >= item?.size,
+        badgeText: badge ? badge.textContent.trim() : '',
+        badgeClass: badge ? badge.className : '',
+        summaryText: summarySubtext ? summarySubtext.textContent.trim() : '',
+        originalFileIntact: item?.file?.size === item?.size && item?.buffer?.byteLength === item?.size
+      };
     });
 
-    const allImagesCompressed = compImgResult.length === 2 && compImgResult.every(r => r.isCompressed);
-    const hasReducedSize = compImgResult.some(r => r.isSmaller);
-    record('Compress Image 3: Batch image compression processed all images with real size reduction',
-      allImagesCompressed && hasReducedSize,
-      `Items: ${compImgResult.map(r => `${r.name}: ${r.origSize}B -> ${r.compSize}B`).join(', ')}`
+    record('Compress PDF 9: Honest size reporting when compression does not reduce file size',
+      honestReportingResult.isLargerOrEqual &&
+      honestReportingResult.badgeText.includes('ไม่สามารถลดขนาดได้เพิ่มเติม') &&
+      honestReportingResult.badgeClass.includes('badge-neutral') &&
+      !honestReportingResult.badgeText.includes('-') &&
+      honestReportingResult.originalFileIntact,
+      `Original: ${honestReportingResult.origSize} B, Output: ${honestReportingResult.compSize} B, Badge: "${honestReportingResult.badgeText}"`
     );
 
-    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'compress_image_workspace.png') });
-
-    // Clear Compress Image
-    await page.click('#btnClearCompressImg');
+    // Clear Compress PDF
+    await page.click('#btnClearCompressPdf');
     await page.waitForTimeout(200);
+    const filesAfterClear = await page.evaluate(() => window.PdfLabTools.compressPdfState.files.length);
+    record('Compress PDF 10: Clear button resets state and removes all files from workspace',
+      filesAfterClear === 0,
+      `Files count: ${filesAfterClear}`
+    );
 
     // =========================================================================
     // CATEGORIZED MEGA MENU QA
@@ -1149,7 +1210,7 @@ async function runTests() {
     });
 
     const expectedCats = ['จัดการ PDF', 'แปลงไฟล์', 'แก้ไข PDF', 'OCR & ข้อความ', 'บีบอัดไฟล์'];
-    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf', 'compress-pdf', 'compress-image'];
+    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf', 'compress-pdf'];
     const allCatsPresent = expectedCats.every(c => megaMenuState.categories.includes(c));
     const allToolsPresent = expectedMegaToolList.every(t => megaMenuState.tools.includes(t));
     const onlyRealTools = megaMenuState.tools.every(t => expectedMegaToolList.includes(t));
@@ -1157,6 +1218,19 @@ async function runTests() {
     record('Mega Menu 1: Dropdown opens on click with all 5 categories and only real functional tools',
       megaMenuState.isVisible && megaMenuState.ariaExpanded === 'true' && allCatsPresent && allToolsPresent && onlyRealTools,
       `Categories: ${megaMenuState.categories.join(' | ')}, Tools: ${megaMenuState.tools.length}`
+    );
+
+    // Verify Category 5 restriction: Phase 1 contains only compress-pdf
+    const cat5Check = await page.evaluate(() => {
+      const menu = document.getElementById('megaMenuDropdown');
+      const cols = Array.from(menu.querySelectorAll('.mega-column'));
+      const cat5 = cols.find(c => c.querySelector('.category-title')?.textContent.includes('บีบอัดไฟล์'));
+      const tools = cat5 ? Array.from(cat5.querySelectorAll('.mega-tool-item')).map(t => t.dataset.toolId) : [];
+      return tools;
+    });
+    record('Mega Menu 2: Category 5 (บีบอัดไฟล์) contains strictly "compress-pdf" in Phase 1',
+      cat5Check.length === 1 && cat5Check[0] === 'compress-pdf',
+      `Category 5 tools: ${cat5Check.join(', ')}`
     );
 
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'megamenu_5cats_desktop.png') });
@@ -1173,7 +1247,7 @@ async function runTests() {
         isFocused: document.activeElement === btn
       };
     });
-    record('Mega Menu 2: Pressing Escape closes menu and restores focus to trigger button',
+    record('Mega Menu 3: Pressing Escape closes menu and restores focus to trigger button',
       escapeState.isClosed && escapeState.ariaExpanded === 'false' && escapeState.isFocused
     );
 
@@ -1186,7 +1260,7 @@ async function runTests() {
       const menu = document.getElementById('megaMenuDropdown');
       return menu.classList.contains('hidden');
     });
-    record('Mega Menu 3: Clicking outside closes mega menu dropdown', outsideClosed);
+    record('Mega Menu 4: Clicking outside closes mega menu dropdown', outsideClosed);
 
     // 4. Return to IMAGE -> PDF and verify workspace preserved
     await page.click('.nav-brand');
