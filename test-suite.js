@@ -973,6 +973,162 @@ async function runTests() {
     await page.waitForTimeout(300);
 
     // =========================================================================
+    // TOOL 8: บีบอัด PDF (Compress PDF) QA
+    // =========================================================================
+    console.log('\n--- Testing Tool 8: บีบอัด PDF (Compress PDF) ---');
+    await selectTool('compress-pdf');
+    await page.waitForTimeout(300);
+
+    const isCompressPdfVisible = await page.isVisible('#toolCompressPdf');
+    record('Compress PDF 1: View switched to บีบอัด PDF', isCompressPdfVisible);
+
+    // Test PDF compression with real test fixture
+    const fixturePdfPath = path.join(ROOT_DIR, 'test-fixtures/compress-test-large.pdf');
+    if (!fs.existsSync(fixturePdfPath)) {
+      const doc = await PDFDocument.create();
+      const b = fs.readFileSync(path.join(ROOT_DIR, 'test-fixtures/ocr-thai.jpg'));
+      for (let i = 0; i < 5; i++) {
+        const copy = Buffer.from(b);
+        copy[copy.length - 20 - i] = (copy[copy.length - 20 - i] + i + 1) % 255;
+        const img = await doc.embedJpg(copy);
+        const p = doc.addPage([img.width, img.height]);
+        p.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+      }
+      const bytes = await doc.save();
+      fs.writeFileSync(fixturePdfPath, bytes);
+    }
+    const origPdfSize = fs.statSync(fixturePdfPath).size;
+    const compressPdfInput = await page.$('#fileInputCompressPdf');
+    await compressPdfInput.setInputFiles(fixturePdfPath);
+    await page.waitForTimeout(800);
+
+    const compPdfLoaded = await page.evaluate(() => {
+      const st = window.PdfLabTools.compressPdfState;
+      return {
+        count: st.files.length,
+        pages: st.files[0]?.pageCount || 0,
+        name: st.files[0]?.name || ''
+      };
+    });
+    record('Compress PDF 2: PDF loaded into workspace with accurate page count',
+      compPdfLoaded.count === 1 && compPdfLoaded.pages === 5,
+      `Loaded: ${compPdfLoaded.count} file, ${compPdfLoaded.pages} pages`
+    );
+
+    // Execute Compress PDF (Smart Balanced mode)
+    await page.click('#btnExecuteCompressPdf');
+    // Wait for progress modal to hide
+    await page.waitForFunction(() => {
+      const modal = document.getElementById('progressModal');
+      return modal && modal.classList.contains('hidden');
+    }, { timeout: 30000 });
+
+    const compPdfResult = await page.evaluate(async () => {
+      const item = window.PdfLabTools.compressPdfState.files[0];
+      if (!item || !item.compressedBlob) return { success: false };
+      
+      const compSize = item.compressedSize;
+      const origSize = item.size;
+      const ab = await item.compressedBlob.arrayBuffer();
+      const loaded = await window.PDFLib.PDFDocument.load(ab);
+      const pageCount = loaded.getPageCount();
+      const firstPage = loaded.getPage(0);
+      const { width, height } = firstPage.getSize();
+
+      return {
+        success: true,
+        origSize,
+        compSize,
+        isSmaller: compSize < origSize,
+        pageCount,
+        width,
+        height
+      };
+    });
+
+    record('Compress PDF 3: Smart compression reduced file size with 100% page count preserved',
+      compPdfResult.success && compPdfResult.isSmaller && compPdfResult.pageCount === 5,
+      `Original: ${compPdfResult.origSize} B, Compressed: ${compPdfResult.compSize} B, Pages: ${compPdfResult.pageCount}`
+    );
+    record('Compress PDF 4: Page dimensions preserved in compressed PDF',
+      compPdfResult.width > 0 && compPdfResult.height > 0,
+      `Dimensions: ${compPdfResult.width} × ${compPdfResult.height} pt`
+    );
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'compress_pdf_workspace.png') });
+
+    // Clear Compress PDF
+    await page.click('#btnClearCompressPdf');
+    await page.waitForTimeout(200);
+
+    // =========================================================================
+    // TOOL 9: บีบอัดรูปภาพ (Compress Image) QA
+    // =========================================================================
+    console.log('\n--- Testing Tool 9: บีบอัดรูปภาพ (Compress Image) ---');
+    await selectTool('compress-image');
+    await page.waitForTimeout(300);
+
+    const isCompressImgVisible = await page.isVisible('#toolCompressImage');
+    record('Compress Image 1: View switched to บีบอัดรูปภาพ', isCompressImgVisible);
+
+    // Load multiple image fixtures (JPG, PNG)
+    const compressImgInput = await page.$('#fileInputCompressImage');
+    const fixtureJpgPath = path.join(ROOT_DIR, 'test-fixtures/ocr-thai.jpg');
+    const fixturePngPath = path.join(ROOT_DIR, 'test-fixtures/test-portrait.png');
+    await compressImgInput.setInputFiles([fixtureJpgPath, fixturePngPath]);
+    await page.waitForTimeout(800);
+
+    const compImgLoaded = await page.evaluate(() => {
+      const st = window.PdfLabTools.compressImageState;
+      return {
+        count: st.items.length,
+        names: st.items.map(it => it.name)
+      };
+    });
+    record('Compress Image 2: Multiple images loaded into compression grid',
+      compImgLoaded.count === 2,
+      `Count: ${compImgLoaded.count} (${compImgLoaded.names.join(', ')})`
+    );
+
+    // Adjust quality to 50% via slider and execute
+    await page.evaluate(() => {
+      const slider = document.getElementById('compressImgQuality');
+      if (slider) {
+        slider.value = 50;
+        slider.dispatchEvent(new Event('input'));
+      }
+    });
+    await page.click('#btnExecuteCompressImg');
+    await page.waitForFunction(() => {
+      const modal = document.getElementById('progressModal');
+      return modal && modal.classList.contains('hidden');
+    }, { timeout: 30000 });
+
+    const compImgResult = await page.evaluate(() => {
+      const items = window.PdfLabTools.compressImageState.items;
+      return items.map(it => ({
+        name: it.name,
+        origSize: it.size,
+        compSize: it.compressedSize,
+        isSmaller: it.compressedSize < it.size,
+        isCompressed: it.isCompressed
+      }));
+    });
+
+    const allImagesCompressed = compImgResult.length === 2 && compImgResult.every(r => r.isCompressed);
+    const hasReducedSize = compImgResult.some(r => r.isSmaller);
+    record('Compress Image 3: Batch image compression processed all images with real size reduction',
+      allImagesCompressed && hasReducedSize,
+      `Items: ${compImgResult.map(r => `${r.name}: ${r.origSize}B -> ${r.compSize}B`).join(', ')}`
+    );
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'compress_image_workspace.png') });
+
+    // Clear Compress Image
+    await page.click('#btnClearCompressImg');
+    await page.waitForTimeout(200);
+
+    // =========================================================================
     // CATEGORIZED MEGA MENU QA
     // =========================================================================
     console.log('\n--- Testing Categorized Mega Menu QA ---');
@@ -992,16 +1148,18 @@ async function runTests() {
       };
     });
 
-    const expectedCats = ['จัดการ PDF', 'แปลงไฟล์', 'แก้ไข PDF', 'OCR & ข้อความ'];
-    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf'];
+    const expectedCats = ['จัดการ PDF', 'แปลงไฟล์', 'แก้ไข PDF', 'OCR & ข้อความ', 'บีบอัดไฟล์'];
+    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf', 'compress-pdf', 'compress-image'];
     const allCatsPresent = expectedCats.every(c => megaMenuState.categories.includes(c));
     const allToolsPresent = expectedMegaToolList.every(t => megaMenuState.tools.includes(t));
     const onlyRealTools = megaMenuState.tools.every(t => expectedMegaToolList.includes(t));
 
-    record('Mega Menu 1: Dropdown opens on click with all 4 categories and only real functional tools',
+    record('Mega Menu 1: Dropdown opens on click with all 5 categories and only real functional tools',
       megaMenuState.isVisible && megaMenuState.ariaExpanded === 'true' && allCatsPresent && allToolsPresent && onlyRealTools,
       `Categories: ${megaMenuState.categories.join(' | ')}, Tools: ${megaMenuState.tools.length}`
     );
+
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'megamenu_5cats_desktop.png') });
 
     // 2. Keyboard accessibility: Escape key closes menu and returns focus
     await page.keyboard.press('Escape');

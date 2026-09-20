@@ -230,6 +230,34 @@
                   </div>
                 </div>
 
+                <!-- Category 5: บีบอัดไฟล์ -->
+                <div class="mega-column">
+                  <div class="mega-category-header">
+                    <span class="category-icon" aria-hidden="true">🗜️</span>
+                    <h3 class="category-title">บีบอัดไฟล์</h3>
+                  </div>
+                  <div class="mega-tool-list" role="list">
+                    <button type="button" class="mega-tool-item" data-tool-id="compress-pdf">
+                      <svg class="mega-tool-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M4 14h6m-6 4h6m8-8V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <polyline points="16 12 12 16 8 12"/>
+                        <line x1="12" y1="16" x2="12" y2="8"/>
+                      </svg>
+                      <span class="mega-tool-name">บีบอัด PDF</span>
+                    </button>
+                    <button type="button" class="mega-tool-item" data-tool-id="compress-image">
+                      <svg class="mega-tool-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                        <polyline points="16 7 12 11 8 7"/>
+                      </svg>
+                      <span class="mega-tool-name">บีบอัดรูปภาพ</span>
+                    </button>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
@@ -1226,6 +1254,307 @@
                 </div>
                 <p>ไฟล์ของคุณไม่ถูกอัปโหลดขึ้นเซิร์ฟเวอร์ การตรวจจับข้อความและสร้าง Searchable PDF ทำงานในเบราว์เซอร์ของคุณโดยตรง</p>
               </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- TOOL 8: บีบอัด PDF (Compress PDF) -->
+      <section class="tool-view hidden" id="toolCompressPdf" aria-labelledby="compressPdfHeading">
+        <!-- Upload Landing Screen -->
+        <div class="upload-screen" id="compressPdfUploadScreen">
+          <div class="upload-card">
+            <div class="drop-zone" id="compressPdfDropZone" role="button" tabindex="0" aria-label="คลิกหรือลากไฟล์ PDF มาวางที่นี่เพื่อบีบอัดไฟล์">
+              <div class="drop-zone-icon-wrapper">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 14h6m-6 4h6m8-8V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <polyline points="16 12 12 16 8 12"/>
+                  <line x1="12" y1="16" x2="12" y2="8"/>
+                </svg>
+              </div>
+              <h2 id="compressPdfHeading" class="drop-title">ลากไฟล์ PDF มาวางที่นี่</h2>
+              <p class="drop-desc">ลดขนาดไฟล์ PDF ในเครื่อง 100% รวดเร็ว ปลอดภัย ไม่ส่งไฟล์ขึ้นเซิร์ฟเวอร์</p>
+              <div class="drop-divider"><span>หรือ</span></div>
+              <button type="button" class="btn btn-primary btn-lg" id="btnSelectCompressPdf">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                <span>+ เลือกไฟล์ PDF</span>
+              </button>
+            </div>
+            <input type="file" id="fileInputCompressPdf" accept=".pdf,application/pdf" multiple class="hidden">
+          </div>
+        </div>
+
+        <!-- Workspace Screen -->
+        <div class="workspace-screen hidden" id="compressPdfWorkspaceScreen">
+          <div class="workspace-left">
+            <div class="workspace-toolbar">
+              <div class="toolbar-left">
+                <span class="file-count-badge" id="compressPdfFileBadge">0 ไฟล์</span>
+                <span class="badge-status" id="compressPdfStatusBadge">พร้อมบีบอัด</span>
+              </div>
+              <div class="toolbar-right">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnAddMoreCompressPdf" title="เพิ่มไฟล์ PDF อีก">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>เพิ่มไฟล์</span>
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" id="btnClearCompressPdf" title="ล้างรายการทั้งหมด">
+                  <span>ล้างทั้งหมด</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- File List Container -->
+            <div class="pdf-file-list" id="compressPdfFileList">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Post-Compression Results Summary Card -->
+            <div class="compress-summary-card hidden" id="compressPdfSummaryCard">
+              <div class="compress-summary-header">
+                <div class="compress-summary-title-wrap">
+                  <span class="compress-check-icon">✓</span>
+                  <div>
+                    <h4 class="compress-summary-title">บีบอัดไฟล์ PDF สำเร็จเรียบร้อย</h4>
+                    <p class="compress-summary-subtext" id="compressPdfSummarySubtext">ลดขนาดได้ 0 B (0%)</p>
+                  </div>
+                </div>
+                <div class="compress-summary-actions">
+                  <button type="button" class="btn btn-primary btn-sm" id="btnDownloadAllCompressPdf">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span id="btnDownloadAllCompressPdfText">ดาวน์โหลดทั้งหมด (.zip)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy Guarantee Callout -->
+            <div class="privacy-callout-card">
+              <div class="privacy-callout-header">🔒 ปลอดภัยและเป็นส่วนตัว 100%</div>
+              <p>เอกสารของคุณถูกประมวลผลและบีบอัดภายในหน่วยความจำของเว็บเบราว์เซอร์บนอุปกรณ์เครื่องนี้เท่านั้น ไม่มีการส่งข้อมูลใด ๆ ออกสู่อินเทอร์เน็ต</p>
+            </div>
+          </div>
+
+          <!-- Settings Sidebar -->
+          <aside class="workspace-right">
+            <div class="settings-card">
+              <h3 class="settings-title">ระดับการบีบอัด (Compression Level)</h3>
+
+              <!-- Compression Level Options -->
+              <div class="setting-group">
+                <label class="setting-label">เลือกระดับที่ต้องการ:</label>
+                <div class="compression-level-selector" role="radiogroup" aria-label="ระดับการบีบอัดไฟล์">
+                  <label class="level-card" for="compLvlHigh">
+                    <input type="radio" name="compressPdfLevel" id="compLvlHigh" value="high">
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-high"></span>
+                        <span class="level-name">คุณภาพสูง (High Quality)</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดเล็กน้อย เน้นรักษาความคมชัดสูงสุด (150 DPI / 85% คุณภาพ)</p>
+                    </div>
+                  </label>
+
+                  <label class="level-card selected" for="compLvlBalanced">
+                    <input type="radio" name="compressPdfLevel" id="compLvlBalanced" value="balanced" checked>
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-balanced"></span>
+                        <span class="level-name">สมดุล (Balanced) — แนะนำ</span>
+                        <span class="badge-recommended">แนะนำ</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดและคุณภาพอย่างสมดุล เหมาะสำหรับเอกสารทั่วไป (120 DPI / 72% คุณภาพ)</p>
+                    </div>
+                  </label>
+
+                  <label class="level-card" for="compLvlSmall">
+                    <input type="radio" name="compressPdfLevel" id="compLvlSmall" value="small">
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-small"></span>
+                        <span class="level-name">ขนาดเล็ก (Small Size)</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดไฟล์มากที่สุด เหมาะสำหรับส่งผ่านช่องทางที่จำกัดขนาดไฟล์ (90 DPI / 55% คุณภาพ)</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Mode Selection -->
+              <div class="setting-group">
+                <label class="setting-label">โหมดการประมวลผล:</label>
+                <div class="segment-group">
+                  <label class="segment-btn active">
+                    <input type="radio" name="compressPdfMode" value="smart" checked>
+                    <span>บีบอัดอัจฉริยะ (Smart)</span>
+                  </label>
+                  <label class="segment-btn">
+                    <input type="radio" name="compressPdfMode" value="lossless">
+                    <span>โครงสร้างเท่านั้น (Lossless)</span>
+                  </label>
+                </div>
+                <div class="callout-note" id="compressPdfModeNotice">
+                  ℹ️ โหมดบีบอัดอัจฉริยะจะปรับลดขนาดรูปภาพในเอกสาร เหมาะกับเอกสารสแกนและใบงานเพื่อให้ไฟล์เล็กลงมากที่สุด
+                </div>
+              </div>
+
+              <!-- Action Button -->
+              <div class="action-box">
+                <button type="button" class="btn btn-primary btn-cta" id="btnExecuteCompressPdf">
+                  <span class="btn-cta-content">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <polyline points="16 12 12 16 8 12"/>
+                      <line x1="12" y1="16" x2="12" y2="8"/>
+                    </svg>
+                    <span class="cta-text-main">🗜️ เริ่มบีบอัด PDF</span>
+                  </span>
+                  <span class="cta-text-sub" id="compressPdfCtaSubtext">0 ไฟล์</span>
+                </button>
+              </div>
+
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- TOOL 9: บีบอัดรูปภาพ (Compress Image) -->
+      <section class="tool-view hidden" id="toolCompressImage" aria-labelledby="compressImageHeading">
+        <!-- Upload Landing Screen -->
+        <div class="upload-screen" id="compressImageUploadScreen">
+          <div class="upload-card">
+            <div class="drop-zone" id="compressImageDropZone" role="button" tabindex="0" aria-label="คลิกหรือลากรูปภาพมาวางที่นี่เพื่อบีบอัดไฟล์">
+              <div class="drop-zone-icon-wrapper">
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                  <polyline points="16 7 12 11 8 7"/>
+                </svg>
+              </div>
+              <h2 id="compressImageHeading" class="drop-title">ลากรูปภาพมาวางที่นี่</h2>
+              <p class="drop-desc">รองรับ JPG, PNG, WebP, HEIC ลดขนาดไฟล์ภาพในเครื่อง 100% ปลอดภัย ไม่ส่งข้อมูลขึ้นเซิร์ฟเวอร์</p>
+              <div class="drop-divider"><span>หรือ</span></div>
+              <button type="button" class="btn btn-primary btn-lg" id="btnSelectCompressImage">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                <span>+ เลือกรูปภาพ</span>
+              </button>
+            </div>
+            <input type="file" id="fileInputCompressImage" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple class="hidden">
+          </div>
+        </div>
+
+        <!-- Workspace Screen -->
+        <div class="workspace-screen hidden" id="compressImageWorkspaceScreen">
+          <div class="workspace-left">
+            <div class="workspace-toolbar">
+              <div class="toolbar-left">
+                <span class="file-count-badge" id="compressImgFileBadge">0 ภาพ</span>
+                <span class="badge-status" id="compressImgStatusBadge">พร้อมบีบอัด</span>
+              </div>
+              <div class="toolbar-right">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnAddMoreCompressImg" title="เพิ่มรูปภาพอีก">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span>เพิ่มรูปภาพ</span>
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm text-danger" id="btnClearCompressImg" title="ล้างรายการทั้งหมด">
+                  <span>ล้างทั้งหมด</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Image Grid Container -->
+            <div class="compress-img-grid" id="compressImgGrid">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <!-- Post-Compression Results Summary Card -->
+            <div class="compress-summary-card hidden" id="compressImgSummaryCard">
+              <div class="compress-summary-header">
+                <div class="compress-summary-title-wrap">
+                  <span class="compress-check-icon">✓</span>
+                  <div>
+                    <h4 class="compress-summary-title">บีบอัดรูปภาพสำเร็จเรียบร้อย</h4>
+                    <p class="compress-summary-subtext" id="compressImgSummarySubtext">ลดขนาดได้ 0 B (0%)</p>
+                  </div>
+                </div>
+                <div class="compress-summary-actions">
+                  <button type="button" class="btn btn-primary btn-sm" id="btnDownloadAllCompressImg">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span id="btnDownloadAllCompressImgText">ดาวน์โหลดทั้งหมด (.zip)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Privacy Guarantee Callout -->
+            <div class="privacy-callout-card">
+              <div class="privacy-callout-header">🔒 ปลอดภัยและเป็นส่วนตัว 100%</div>
+              <p>รูปภาพของคุณถูกประมวลผลและบีบอัดภายในเบราว์เซอร์บนเครื่องนี้เท่านั้น ไม่มีการส่งรูปภาพใด ๆ ออกนอกอุปกรณ์</p>
+            </div>
+          </div>
+
+          <!-- Settings Sidebar -->
+          <aside class="workspace-right">
+            <div class="settings-card">
+              <h3 class="settings-title">การตั้งค่าการบีบอัดภาพ</h3>
+
+              <!-- Output Format Selection -->
+              <div class="setting-group">
+                <label class="setting-label" for="compressImgFormat">รูปแบบไฟล์ส่งออก (Output Format):</label>
+                <select class="setting-select" id="compressImgFormat">
+                  <option value="original" selected>คงรูปแบบเดิม (ตามไฟล์ต้นฉบับ / JPG สำหรับ HEIC)</option>
+                  <option value="jpeg">JPEG (.jpg) — เข้ากันได้สูงสุด</option>
+                  <option value="webp">WebP (.webp) — บีบอัดได้เล็กและคุณภาพดีเยี่ยม</option>
+                  <option value="png">PNG (.png) — ไม่สูญเสียรายละเอียด</option>
+                </select>
+              </div>
+
+              <!-- Quality Slider & Presets -->
+              <div class="setting-group">
+                <div class="setting-label-row">
+                  <label class="setting-label" for="compressImgQuality">คุณภาพของภาพ (Quality):</label>
+                  <span class="setting-value-badge" id="compressImgQualityValue">75%</span>
+                </div>
+                <input type="range" class="setting-slider" id="compressImgQuality" min="10" max="100" value="75" step="5">
+                <div class="slider-ticks">
+                  <button type="button" class="btn-tick" data-val="50">ประหยัด 50%</button>
+                  <button type="button" class="btn-tick active" data-val="75">สมดุล 75%</button>
+                  <button type="button" class="btn-tick" data-val="90">คมชัดสูง 90%</button>
+                </div>
+              </div>
+
+              <!-- Resize Dimension Constraint -->
+              <div class="setting-group">
+                <label class="setting-label" for="compressImgMaxDim">จำกัดขนาดด้านที่ยาวที่สุด (Max Dimension):</label>
+                <select class="setting-select" id="compressImgMaxDim">
+                  <option value="original" selected>ขนาดเดิม (ไม่ลดขนาด Pixel)</option>
+                  <option value="2560">2560 px (2K QHD)</option>
+                  <option value="1920">1920 px (Full HD — แนะนำ)</option>
+                  <option value="1280">1280 px (HD)</option>
+                  <option value="800">800 px (สำหรับเว็บ/แชท)</option>
+                </select>
+              </div>
+
+              <!-- Action Button -->
+              <div class="action-box">
+                <button type="button" class="btn btn-primary btn-cta" id="btnExecuteCompressImg">
+                  <span class="btn-cta-content">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <polyline points="16 7 12 11 8 7"/>
+                    </svg>
+                    <span class="cta-text-main">🖼️ เริ่มบีบอัดรูปภาพ</span>
+                  </span>
+                  <span class="cta-text-sub" id="compressImgCtaSubtext">0 ภาพ</span>
+                </button>
+              </div>
+
             </div>
           </aside>
         </div>

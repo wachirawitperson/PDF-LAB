@@ -81,6 +81,16 @@
     return canvas;
   }
 
+  // --- Helper: Get Image Dimensions from Object URL ---
+  function getImageDimensions(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => reject(new Error('Image failed to load'));
+      img.src = url;
+    });
+  }
+
   // --- Helper: Parse Range String (e.g. "1-3, 5, 8-10") ---
   function parsePageRange(rangeStr, maxPages) {
     const selected = new Set();
@@ -2302,6 +2312,889 @@
     }
   }
 
+  // ==========================================================================
+  // TOOL 8: บีบอัด PDF (Compress PDF)
+  // ==========================================================================
+  const compressPdfState = {
+    files: [], // Array of { id, file, name, size, pageCount, buffer, thumbUrl, compressedBlob, compressedSize, isCompressed }
+    level: 'balanced', // 'high' | 'balanced' | 'small'
+    mode: 'smart',     // 'smart' | 'lossless'
+    isProcessing: false
+  };
+
+  // Compression presets for Smart mode:
+  // high: ~150 DPI (scale 2.083), quality 0.85
+  // balanced: ~120 DPI (scale 1.666), quality 0.72
+  // small: ~90 DPI (scale 1.25), quality 0.55
+  const COMPRESS_PDF_PRESETS = {
+    high: { scale: 150 / 72, quality: 0.85, label: 'คุณภาพสูง (150 DPI / 85%)' },
+    balanced: { scale: 120 / 72, quality: 0.72, label: 'สมดุล (120 DPI / 72%)' },
+    small: { scale: 90 / 72, quality: 0.55, label: 'ขนาดเล็ก (90 DPI / 55%)' }
+  };
+
+  function initCompressPdfTool() {
+    const fileInput = document.getElementById('fileInputCompressPdf');
+    const btnSelect = document.getElementById('btnSelectCompressPdf');
+    const dropZone = document.getElementById('compressPdfDropZone');
+    const btnAddMore = document.getElementById('btnAddMoreCompressPdf');
+    const btnClear = document.getElementById('btnClearCompressPdf');
+    const btnExecute = document.getElementById('btnExecuteCompressPdf');
+    const btnDownloadAll = document.getElementById('btnDownloadAllCompressPdf');
+
+    btnSelect?.addEventListener('click', () => fileInput?.click());
+    btnAddMore?.addEventListener('click', () => fileInput?.click());
+
+    dropZone?.addEventListener('click', (e) => {
+      if (e.target.closest('#btnSelectCompressPdf')) return;
+      fileInput?.click();
+    });
+
+    dropZone?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput?.click();
+      }
+    });
+
+    setupDropZoneEvents(dropZone, handleCompressPdfFiles);
+
+    fileInput?.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleCompressPdfFiles(Array.from(e.target.files));
+        fileInput.value = '';
+      }
+    });
+
+    btnClear?.addEventListener('click', () => {
+      compressPdfState.files.forEach(f => {
+        if (f.thumbUrl && f.thumbUrl.startsWith('blob:')) URL.revokeObjectURL(f.thumbUrl);
+      });
+      compressPdfState.files = [];
+      renderCompressPdfUI();
+      showToast('ล้างรายการไฟล์ทั้งหมดแล้ว', 'info');
+    });
+
+    // Level selector radio changes
+    document.querySelectorAll('input[name="compressPdfLevel"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        compressPdfState.level = e.target.value;
+        // Update selection UI classes
+        document.querySelectorAll('.compression-level-selector .level-card').forEach(card => {
+          const input = card.querySelector('input[type="radio"]');
+          card.classList.toggle('selected', input && input.checked);
+        });
+      });
+    });
+
+    // Mode selector radio changes
+    document.querySelectorAll('input[name="compressPdfMode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        compressPdfState.mode = e.target.value;
+        document.querySelectorAll('input[name="compressPdfMode"]').forEach(r => {
+          r.closest('.segment-btn')?.classList.toggle('active', r.checked);
+        });
+        const notice = document.getElementById('compressPdfModeNotice');
+        if (notice) {
+          if (compressPdfState.mode === 'lossless') {
+            notice.textContent = 'ℹ️ โหมดโครงสร้างเท่านั้นจะลบ metadata ซ้ำซ้อนและบีบอัด Object Streams โดยคงความคมชัดและเวกเตอร์ 100%';
+          } else {
+            notice.textContent = 'ℹ️ โหมดบีบอัดอัจฉริยะจะปรับลดขนาดรูปภาพในเอกสาร เหมาะกับเอกสารสแกนและใบงานเพื่อให้ไฟล์เล็กลงมากที่สุด';
+          }
+        }
+      });
+    });
+
+    btnExecute?.addEventListener('click', executeCompressPdf);
+    btnDownloadAll?.addEventListener('click', downloadAllCompressPdf);
+  }
+
+  async function handleCompressPdfFiles(files) {
+    const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf') || f.type === 'application/pdf');
+    if (pdfFiles.length === 0) {
+      showToast('กรุณาเลือกไฟล์เอกสาร PDF เท่านั้น', 'error');
+      return;
+    }
+
+    showProgressModal();
+    updateProgress(0, pdfFiles.length, 'กำลังตรวจสอบไฟล์ PDF...');
+
+    let loaded = 0;
+    for (let i = 0; i < pdfFiles.length; i++) {
+      const file = pdfFiles[i];
+      updateProgress(i + 1, pdfFiles.length, `กำลังอ่าน "${file.name}"...`);
+      try {
+        const loadedPdf = await loadPdfDocument(file);
+        let thumbUrl = null;
+        try {
+          thumbUrl = await renderPdfThumbnail(loadedPdf.buffer, 1, 0.3);
+        } catch (_) {}
+
+        compressPdfState.files.push({
+          id: 'comp_pdf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          file,
+          name: file.name,
+          size: file.size,
+          pageCount: loadedPdf.pageCount,
+          buffer: loadedPdf.buffer,
+          thumbUrl,
+          compressedBlob: null,
+          compressedSize: null,
+          isCompressed: false
+        });
+        loaded++;
+      } catch (err) {
+        console.warn('Compress PDF Load Error:', err);
+        showToast(err.message || `ไม่สามารถเปิด "${file.name}" ได้`, 'error');
+      }
+    }
+
+    hideProgressModal();
+    if (loaded > 0) {
+      renderCompressPdfUI();
+      showToast(`เพิ่มไฟล์ PDF สำเร็จ ${loaded} ไฟล์`, 'success');
+    }
+  }
+
+  function renderCompressPdfUI() {
+    const uploadScreen = document.getElementById('compressPdfUploadScreen');
+    const workspaceScreen = document.getElementById('compressPdfWorkspaceScreen');
+    const fileListEl = document.getElementById('compressPdfFileList');
+    const fileBadge = document.getElementById('compressPdfFileBadge');
+    const statusBadge = document.getElementById('compressPdfStatusBadge');
+    const ctaSubtext = document.getElementById('compressPdfCtaSubtext');
+    const summaryCard = document.getElementById('compressPdfSummaryCard');
+    const summarySubtext = document.getElementById('compressPdfSummarySubtext');
+
+    if (!uploadScreen || !workspaceScreen) return;
+
+    if (compressPdfState.files.length === 0) {
+      uploadScreen.classList.remove('hidden');
+      workspaceScreen.classList.add('hidden');
+      if (fileListEl) fileListEl.innerHTML = '';
+      if (summaryCard) summaryCard.classList.add('hidden');
+      return;
+    }
+
+    uploadScreen.classList.add('hidden');
+    workspaceScreen.classList.remove('hidden');
+
+    const totalFiles = compressPdfState.files.length;
+    const compressedFiles = compressPdfState.files.filter(f => f.isCompressed);
+    const allDone = compressedFiles.length === totalFiles && totalFiles > 0;
+
+    if (fileBadge) fileBadge.textContent = `${totalFiles} ไฟล์`;
+    if (ctaSubtext) ctaSubtext.textContent = `${totalFiles} ไฟล์`;
+
+    if (statusBadge) {
+      if (allDone) {
+        statusBadge.textContent = 'บีบอัดเรียบร้อย';
+        statusBadge.className = 'badge-status badge-success';
+      } else {
+        statusBadge.textContent = 'พร้อมบีบอัด';
+        statusBadge.className = 'badge-status';
+      }
+    }
+
+    // Summary Card
+    if (summaryCard) {
+      if (compressedFiles.length > 0) {
+        summaryCard.classList.remove('hidden');
+        const origTotal = compressedFiles.reduce((acc, f) => acc + f.size, 0);
+        const compTotal = compressedFiles.reduce((acc, f) => acc + (f.compressedSize || f.size), 0);
+        const savedBytes = Math.max(0, origTotal - compTotal);
+        const percentSaved = origTotal > 0 ? Math.round((savedBytes / origTotal) * 100) : 0;
+        if (summarySubtext) {
+          summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${percentSaved}%) จากขนาดเดิม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+        }
+      } else {
+        summaryCard.classList.add('hidden');
+      }
+    }
+
+    // File List
+    if (fileListEl) {
+      fileListEl.innerHTML = '';
+      compressPdfState.files.forEach((item, idx) => {
+        const row = document.createElement('div');
+        row.className = 'compress-file-item';
+        row.dataset.id = item.id;
+
+        const thumbHtml = item.thumbUrl
+          ? `<img class="compress-file-thumb" src="${item.thumbUrl}" alt="หน้าปก">`
+          : `<div class="compress-file-thumb-placeholder"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg></div>`;
+
+        let resultBadgeHtml = '';
+        if (item.isCompressed) {
+          const origSize = item.size;
+          const compSize = item.compressedSize;
+          if (compSize < origSize) {
+            const pct = Math.round(((origSize - compSize) / origSize) * 100);
+            resultBadgeHtml = `
+              <span class="compress-result-badge badge-reduced">
+                ↓ ${pct}% (${formatFileSize(compSize)})
+              </span>
+            `;
+          } else {
+            resultBadgeHtml = `
+              <span class="compress-result-badge badge-neutral">
+                ขนาดใกล้เคียงเดิม (${formatFileSize(compSize)})
+              </span>
+            `;
+          }
+        }
+
+        row.innerHTML = `
+          ${thumbHtml}
+          <div class="compress-file-info">
+            <span class="compress-file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+            <div class="compress-file-meta">
+              <span>${item.pageCount} หน้า</span>
+              <span class="compress-size-pill">ขนาดเดิม: ${formatFileSize(item.size)}</span>
+              ${resultBadgeHtml}
+            </div>
+          </div>
+          <div class="compress-file-actions">
+            ${item.isCompressed ? `
+              <button type="button" class="btn btn-primary btn-sm btn-dl-single" title="ดาวน์โหลดไฟล์ที่บีบอัดแล้ว">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>โหลด</span>
+              </button>
+            ` : ''}
+            <button type="button" class="btn btn-ghost btn-sm btn-remove-item text-danger" title="ลบไฟล์นี้">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        `;
+
+        // Download single
+        const dlBtn = row.querySelector('.btn-dl-single');
+        dlBtn?.addEventListener('click', () => {
+          if (item.compressedBlob) {
+            let outName = item.name.replace(/\.pdf$/i, '') + '-compressed.pdf';
+            downloadBlob(item.compressedBlob, outName);
+            showToast(`ดาวน์โหลด "${outName}" เรียบร้อย`, 'success');
+          }
+        });
+
+        // Remove item
+        const removeBtn = row.querySelector('.btn-remove-item');
+        removeBtn?.addEventListener('click', () => {
+          if (item.thumbUrl && item.thumbUrl.startsWith('blob:')) URL.revokeObjectURL(item.thumbUrl);
+          compressPdfState.files.splice(idx, 1);
+          renderCompressPdfUI();
+        });
+
+        fileListEl.appendChild(row);
+      });
+    }
+  }
+
+  async function executeCompressPdf() {
+    if (compressPdfState.files.length === 0) {
+      showToast('กรุณาเลือกไฟล์ PDF ที่ต้องการบีบอัด', 'warning');
+      return;
+    }
+
+    if (compressPdfState.isProcessing) return;
+    compressPdfState.isProcessing = true;
+
+    showProgressModal();
+    const totalFiles = compressPdfState.files.length;
+    const preset = COMPRESS_PDF_PRESETS[compressPdfState.level] || COMPRESS_PDF_PRESETS.balanced;
+    const isLossless = compressPdfState.mode === 'lossless';
+
+    try {
+      for (let fIdx = 0; fIdx < totalFiles; fIdx++) {
+        const item = compressPdfState.files[fIdx];
+        const progressPrefix = `ไฟล์ ${fIdx + 1}/${totalFiles}: "${item.name}"`;
+
+        updateProgress(fIdx, totalFiles, `${progressPrefix} (กำลังโหลด PDF)...`);
+
+        if (isLossless) {
+          // Lossless Stream Optimization Mode
+          updateProgress(fIdx, totalFiles, `${progressPrefix} (กำลังเพิ่มประสิทธิภาพ Object Streams)...`);
+          const pdfDoc = await window.PDFLib.PDFDocument.load(item.buffer, { ignoreEncryption: false });
+          const outBytes = await pdfDoc.save({ useObjectStreams: true });
+          item.compressedBlob = new Blob([outBytes], { type: 'application/pdf' });
+          item.compressedSize = item.compressedBlob.size;
+          item.isCompressed = true;
+        } else {
+          // Smart Recompression Mode (Per-page Canvas Downsampling with Dimension Preservation)
+          const targetDoc = await window.PDFLib.PDFDocument.create();
+          const loadingTask = window.pdfjsLib.getDocument({ data: new Uint8Array(item.buffer.slice(0)) });
+          const pdfJsDoc = await loadingTask.promise;
+          const pageCount = pdfJsDoc.numPages;
+
+          for (let pNum = 1; pNum <= pageCount; pNum++) {
+            updateProgress(
+              pNum,
+              pageCount,
+              `${progressPrefix} — หน้า ${pNum}/${pageCount}`
+            );
+
+            const page = await pdfJsDoc.getPage(pNum);
+            const origViewport = page.getViewport({ scale: 1.0 });
+            const origWidth = origViewport.width;
+            const origHeight = origViewport.height;
+
+            const renderViewport = page.getViewport({ scale: preset.scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(renderViewport.width);
+            canvas.height = Math.round(renderViewport.height);
+            const ctx = canvas.getContext('2d', { alpha: false });
+
+            await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+
+            // Encode to JPEG data URL with selected quality
+            const dataUrl = canvas.toDataURL('image/jpeg', preset.quality);
+            canvas.width = 0;
+            canvas.height = 0;
+
+            const embeddedJpg = await targetDoc.embedJpg(dataUrl);
+            const newPage = targetDoc.addPage([origWidth, origHeight]);
+            newPage.drawImage(embeddedJpg, {
+              x: 0,
+              y: 0,
+              width: origWidth,
+              height: origHeight
+            });
+          }
+
+          const outBytes = await targetDoc.save({ useObjectStreams: true });
+          item.compressedBlob = new Blob([outBytes], { type: 'application/pdf' });
+          item.compressedSize = item.compressedBlob.size;
+          item.isCompressed = true;
+        }
+      }
+
+      hideProgressModal();
+      compressPdfState.isProcessing = false;
+      renderCompressPdfUI();
+      showToast(`บีบอัดเอกสาร PDF สำเร็จครบทั้ง ${totalFiles} ไฟล์!`, 'success');
+    } catch (err) {
+      console.error('executeCompressPdf error:', err);
+      hideProgressModal();
+      compressPdfState.isProcessing = false;
+      showToast('เกิดข้อผิดพลาดในการบีบอัด PDF: ' + err.message, 'error');
+    }
+  }
+
+  async function downloadAllCompressPdf() {
+    const compressedFiles = compressPdfState.files.filter(f => f.isCompressed && f.compressedBlob);
+    if (compressedFiles.length === 0) {
+      showToast('ไม่มีไฟล์ที่บีบอัดแล้วให้ดาวน์โหลด', 'warning');
+      return;
+    }
+
+    if (compressedFiles.length === 1) {
+      const item = compressedFiles[0];
+      const outName = item.name.replace(/\.pdf$/i, '') + '-compressed.pdf';
+      downloadBlob(item.compressedBlob, outName);
+      showToast(`ดาวน์โหลด "${outName}" เรียบร้อย`, 'success');
+      return;
+    }
+
+    // Multiple files -> Bundle ZIP
+    if (!window.JSZip) {
+      showToast('ไลบรารี JSZip ไม่พร้อมใช้งาน กำลังดาวน์โหลดทีละไฟล์...', 'warning');
+      compressedFiles.forEach(item => {
+        const outName = item.name.replace(/\.pdf$/i, '') + '-compressed.pdf';
+        downloadBlob(item.compressedBlob, outName);
+      });
+      return;
+    }
+
+    showProgressModal();
+    updateProgress(0, 1, 'กำลังสร้างไฟล์ ZIP รวมเอกสาร...');
+
+    try {
+      const zip = new window.JSZip();
+      for (const item of compressedFiles) {
+        const outName = item.name.replace(/\.pdf$/i, '') + '-compressed.pdf';
+        const ab = await item.compressedBlob.arrayBuffer();
+        zip.file(outName, ab);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+        updateProgress(Math.round(metadata.percent), 100, `กำลังบีบอัด ZIP... ${Math.round(metadata.percent)}%`);
+      });
+
+      hideProgressModal();
+      downloadBlob(zipBlob, 'pdf-lab-compressed.zip');
+      showToast('ดาวน์โหลด ZIP รวมไฟล์บีบอัดเรียบร้อย', 'success');
+    } catch (err) {
+      console.error('downloadAllCompressPdf error:', err);
+      hideProgressModal();
+      showToast('เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP: ' + err.message, 'error');
+    }
+  }
+
+  // ==========================================================================
+  // TOOL 9: บีบอัดรูปภาพ (Compress Image)
+  // ==========================================================================
+  const compressImageState = {
+    items: [], // Array of { id, file, name, size, type, width, height, previewUrl, originalBlob, compressedBlob, compressedSize, isCompressed, outputWidth, outputHeight }
+    quality: 75,
+    maxDim: 'original',
+    format: 'original', // 'original' | 'jpeg' | 'webp' | 'png'
+    isProcessing: false
+  };
+
+  function initCompressImageTool() {
+    const fileInput = document.getElementById('fileInputCompressImage');
+    const btnSelect = document.getElementById('btnSelectCompressImage');
+    const dropZone = document.getElementById('compressImageDropZone');
+    const btnAddMore = document.getElementById('btnAddMoreCompressImg');
+    const btnClear = document.getElementById('btnClearCompressImg');
+    const btnExecute = document.getElementById('btnExecuteCompressImg');
+    const btnDownloadAll = document.getElementById('btnDownloadAllCompressImg');
+    const qualitySlider = document.getElementById('compressImgQuality');
+    const qualityBadge = document.getElementById('compressImgQualityValue');
+    const formatSelect = document.getElementById('compressImgFormat');
+    const maxDimSelect = document.getElementById('compressImgMaxDim');
+
+    btnSelect?.addEventListener('click', () => fileInput?.click());
+    btnAddMore?.addEventListener('click', () => fileInput?.click());
+
+    dropZone?.addEventListener('click', (e) => {
+      if (e.target.closest('#btnSelectCompressImage')) return;
+      fileInput?.click();
+    });
+
+    dropZone?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput?.click();
+      }
+    });
+
+    setupDropZoneEvents(dropZone, handleCompressImageFiles);
+
+    fileInput?.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleCompressImageFiles(Array.from(e.target.files));
+        fileInput.value = '';
+      }
+    });
+
+    btnClear?.addEventListener('click', () => {
+      compressImageState.items.forEach(item => {
+        if (item.previewUrl && item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+      });
+      compressImageState.items = [];
+      renderCompressImgUI();
+      showToast('ล้างรายการรูปภาพทั้งหมดแล้ว', 'info');
+    });
+
+    // Quality slider
+    qualitySlider?.addEventListener('input', (e) => {
+      compressImageState.quality = parseInt(e.target.value, 10);
+      if (qualityBadge) qualityBadge.textContent = `${compressImageState.quality}%`;
+
+      // Update active tick button
+      document.querySelectorAll('.slider-ticks .btn-tick').forEach(btn => {
+        const val = parseInt(btn.dataset.val, 10);
+        btn.classList.toggle('active', val === compressImageState.quality);
+      });
+    });
+
+    // Quality preset ticks
+    document.querySelectorAll('.slider-ticks .btn-tick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = parseInt(btn.dataset.val, 10);
+        if (!isNaN(val) && qualitySlider) {
+          qualitySlider.value = val;
+          compressImageState.quality = val;
+          if (qualityBadge) qualityBadge.textContent = `${val}%`;
+          document.querySelectorAll('.slider-ticks .btn-tick').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    });
+
+    // Format & Dimension controls
+    formatSelect?.addEventListener('change', (e) => {
+      compressImageState.format = e.target.value;
+    });
+
+    maxDimSelect?.addEventListener('change', (e) => {
+      compressImageState.maxDim = e.target.value;
+    });
+
+    btnExecute?.addEventListener('click', executeCompressImage);
+    btnDownloadAll?.addEventListener('click', downloadAllCompressImage);
+  }
+
+  async function handleCompressImageFiles(files) {
+    const validExts = /\.(jpe?g|png|webp|heic|heif|bmp)$/i;
+    const imgFiles = files.filter(f => validExts.test(f.name) || f.type.startsWith('image/'));
+
+    if (imgFiles.length === 0) {
+      showToast('กรุณาเลือกไฟล์รูปภาพที่รองรับ (JPG, PNG, WebP, HEIC)', 'error');
+      return;
+    }
+
+    showProgressModal();
+    updateProgress(0, imgFiles.length, 'กำลังเตรียมรูปภาพ...');
+
+    let loaded = 0;
+    for (let i = 0; i < imgFiles.length; i++) {
+      const file = imgFiles[i];
+      updateProgress(i + 1, imgFiles.length, `กำลังอ่าน "${file.name}"...`);
+
+      try {
+        let displayBlob = file;
+        const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif') || file.type === 'image/heic' || file.type === 'image/heif';
+
+        if (isHeic) {
+          if (window.heic2any) {
+            try {
+              const converted = await window.heic2any({
+                blob: file,
+                toType: 'image/jpeg',
+                quality: 0.92
+              });
+              displayBlob = Array.isArray(converted) ? converted[0] : converted;
+            } catch (heicErr) {
+              console.warn('HEIC decode error:', heicErr);
+              showToast(`ไม่สามารถถอดรหัส HEIC "${file.name}" ได้`, 'error');
+              continue;
+            }
+          } else {
+            showToast(`โปรแกรมถอดรหัส HEIC ยังไม่พร้อมใช้งานสำหรับ "${file.name}"`, 'error');
+            continue;
+          }
+        }
+
+        const previewUrl = URL.createObjectURL(displayBlob);
+        const dimensions = await getImageDimensions(previewUrl);
+
+        compressImageState.items.push({
+          id: 'comp_img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          file,
+          name: file.name,
+          size: file.size,
+          type: isHeic ? 'image/jpeg' : (file.type || 'image/jpeg'),
+          width: dimensions.width,
+          height: dimensions.height,
+          previewUrl,
+          originalBlob: displayBlob,
+          compressedBlob: null,
+          compressedSize: null,
+          isCompressed: false,
+          outputWidth: dimensions.width,
+          outputHeight: dimensions.height
+        });
+        loaded++;
+      } catch (err) {
+        console.warn('handleCompressImageFiles error:', file.name, err);
+        showToast(`ไม่สามารถเปิดภาพ "${file.name}" ได้`, 'error');
+      }
+    }
+
+    hideProgressModal();
+    if (loaded > 0) {
+      renderCompressImgUI();
+      showToast(`เพิ่มรูปภาพสำเร็จ ${loaded} ภาพ`, 'success');
+    }
+  }
+
+  function renderCompressImgUI() {
+    const uploadScreen = document.getElementById('compressImageUploadScreen');
+    const workspaceScreen = document.getElementById('compressImageWorkspaceScreen');
+    const gridEl = document.getElementById('compressImgGrid');
+    const fileBadge = document.getElementById('compressImgFileBadge');
+    const statusBadge = document.getElementById('compressImgStatusBadge');
+    const ctaSubtext = document.getElementById('compressImgCtaSubtext');
+    const summaryCard = document.getElementById('compressImgSummaryCard');
+    const summarySubtext = document.getElementById('compressImgSummarySubtext');
+
+    if (!uploadScreen || !workspaceScreen) return;
+
+    if (compressImageState.items.length === 0) {
+      uploadScreen.classList.remove('hidden');
+      workspaceScreen.classList.add('hidden');
+      if (gridEl) gridEl.innerHTML = '';
+      if (summaryCard) summaryCard.classList.add('hidden');
+      return;
+    }
+
+    uploadScreen.classList.add('hidden');
+    workspaceScreen.classList.remove('hidden');
+
+    const totalCount = compressImageState.items.length;
+    const compressedCount = compressImageState.items.filter(it => it.isCompressed).length;
+    const allDone = compressedCount === totalCount && totalCount > 0;
+
+    if (fileBadge) fileBadge.textContent = `${totalCount} ภาพ`;
+    if (ctaSubtext) ctaSubtext.textContent = `${totalCount} ภาพ`;
+
+    if (statusBadge) {
+      if (allDone) {
+        statusBadge.textContent = 'บีบอัดเรียบร้อย';
+        statusBadge.className = 'badge-status badge-success';
+      } else {
+        statusBadge.textContent = 'พร้อมบีบอัด';
+        statusBadge.className = 'badge-status';
+      }
+    }
+
+    // Summary card
+    if (summaryCard) {
+      const compressedItems = compressImageState.items.filter(it => it.isCompressed && it.compressedBlob);
+      if (compressedItems.length > 0) {
+        summaryCard.classList.remove('hidden');
+        const origTotal = compressedItems.reduce((acc, it) => acc + it.size, 0);
+        const compTotal = compressedItems.reduce((acc, it) => acc + it.compressedSize, 0);
+        const savedBytes = Math.max(0, origTotal - compTotal);
+        const pctSaved = origTotal > 0 ? Math.round((savedBytes / origTotal) * 100) : 0;
+        if (summarySubtext) {
+          summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${pctSaved}%) จากขนาดเดิม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+        }
+      } else {
+        summaryCard.classList.add('hidden');
+      }
+    }
+
+    // Grid rendering
+    if (gridEl) {
+      gridEl.innerHTML = '';
+      compressImageState.items.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'compress-img-card';
+        card.dataset.id = item.id;
+
+        let resultBadgeHtml = '';
+        let dimsHtml = `${item.width} × ${item.height}`;
+
+        if (item.isCompressed) {
+          if (item.outputWidth !== item.width || item.outputHeight !== item.height) {
+            dimsHtml = `${item.outputWidth} × ${item.outputHeight} <span class="text-muted">(${item.width}×${item.height})</span>`;
+          }
+
+          const origSize = item.size;
+          const compSize = item.compressedSize;
+          if (compSize < origSize) {
+            const pct = Math.round(((origSize - compSize) / origSize) * 100);
+            resultBadgeHtml = `
+              <span class="compress-result-badge badge-reduced">
+                ↓ ${pct}% (${formatFileSize(compSize)})
+              </span>
+            `;
+          } else {
+            resultBadgeHtml = `
+              <span class="compress-result-badge badge-neutral">
+                ขนาดใกล้เคียงเดิม (${formatFileSize(compSize)})
+              </span>
+            `;
+          }
+        }
+
+        card.innerHTML = `
+          <div class="compress-img-preview-box">
+            <img src="${item.previewUrl}" alt="${escapeHtml(item.name)}" loading="lazy">
+          </div>
+          <div class="compress-img-card-body">
+            <span class="compress-img-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+            <div class="compress-img-meta">
+              <span>ขนาดมิติ: ${dimsHtml}</span>
+              <span class="compress-size-pill">เดิม: ${formatFileSize(item.size)}</span>
+              ${resultBadgeHtml}
+            </div>
+            <div class="compress-img-actions">
+              ${item.isCompressed ? `
+                <button type="button" class="btn btn-primary btn-sm btn-dl-img" title="ดาวน์โหลดภาพที่บีบอัดแล้ว">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>โหลด</span>
+                </button>
+              ` : ''}
+              <button type="button" class="btn btn-ghost btn-sm btn-del-img text-danger" title="ลบภาพนี้">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+        `;
+
+        // Download Single Image
+        const dlBtn = card.querySelector('.btn-dl-img');
+        dlBtn?.addEventListener('click', () => {
+          if (item.compressedBlob) {
+            const outName = getCompressedImageName(item.name, item.outputFormat);
+            downloadBlob(item.compressedBlob, outName);
+            showToast(`ดาวน์โหลด "${outName}" เรียบร้อย`, 'success');
+          }
+        });
+
+        // Delete Image
+        const delBtn = card.querySelector('.btn-del-img');
+        delBtn?.addEventListener('click', () => {
+          if (item.previewUrl && item.previewUrl.startsWith('blob:')) URL.revokeObjectURL(item.previewUrl);
+          compressImageState.items.splice(idx, 1);
+          renderCompressImgUI();
+        });
+
+        gridEl.appendChild(card);
+      });
+    }
+  }
+
+  function getCompressedImageName(originalName, targetMime) {
+    const baseName = originalName.replace(/\.[^/.]+$/, '');
+    let ext = '.jpg';
+    if (targetMime === 'image/png') ext = '.png';
+    else if (targetMime === 'image/webp') ext = '.webp';
+    else if (targetMime === 'image/jpeg') ext = '.jpg';
+    return `${baseName}-compressed${ext}`;
+  }
+
+  async function executeCompressImage() {
+    if (compressImageState.items.length === 0) {
+      showToast('กรุณาเลือกรูปภาพที่ต้องการบีบอัด', 'warning');
+      return;
+    }
+
+    if (compressImageState.isProcessing) return;
+    compressImageState.isProcessing = true;
+
+    showProgressModal();
+    const total = compressImageState.items.length;
+    const qualityRatio = compressImageState.quality / 100;
+    const maxDimension = compressImageState.maxDim === 'original' ? null : parseInt(compressImageState.maxDim, 10);
+
+    try {
+      for (let i = 0; i < total; i++) {
+        const item = compressImageState.items[i];
+        updateProgress(i + 1, total, `กำลังบีบอัดรูปภาพ ${i + 1}/${total}: "${item.name}"...`);
+
+        // Determine target mime type
+        let targetMime = 'image/jpeg';
+        if (compressImageState.format === 'original') {
+          if (item.type === 'image/png') targetMime = 'image/png';
+          else if (item.type === 'image/webp') targetMime = 'image/webp';
+          else targetMime = 'image/jpeg';
+        } else if (compressImageState.format === 'png') {
+          targetMime = 'image/png';
+        } else if (compressImageState.format === 'webp') {
+          targetMime = 'image/webp';
+        } else {
+          targetMime = 'image/jpeg';
+        }
+
+        // Calculate target dimensions
+        let origW = item.width;
+        let origH = item.height;
+        let targetW = origW;
+        let targetH = origH;
+
+        if (maxDimension && (origW > maxDimension || origH > maxDimension)) {
+          if (origW >= origH) {
+            targetW = maxDimension;
+            targetH = Math.round((origH * maxDimension) / origW);
+          } else {
+            targetH = maxDimension;
+            targetW = Math.round((origW * maxDimension) / origH);
+          }
+        }
+
+        // Render to canvas
+        const img = new Image();
+        img.src = item.previewUrl;
+        await new Promise((res, rej) => {
+          img.onload = res;
+          img.onerror = rej;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+
+        // PNG might need transparent background; JPEG needs white background
+        if (targetMime === 'image/jpeg') {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
+        }
+
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        // Convert canvas to Blob
+        const compBlob = await new Promise(resolve => {
+          canvas.toBlob(resolve, targetMime, qualityRatio);
+        });
+
+        canvas.width = 0;
+        canvas.height = 0;
+
+        item.compressedBlob = compBlob;
+        item.compressedSize = compBlob.size;
+        item.outputWidth = targetW;
+        item.outputHeight = targetH;
+        item.outputFormat = targetMime;
+        item.isCompressed = true;
+      }
+
+      hideProgressModal();
+      compressImageState.isProcessing = false;
+      renderCompressImgUI();
+      showToast(`บีบอัดรูปภาพสำเร็จครบทั้ง ${total} ภาพ!`, 'success');
+    } catch (err) {
+      console.error('executeCompressImage error:', err);
+      hideProgressModal();
+      compressImageState.isProcessing = false;
+      showToast('เกิดข้อผิดพลาดในการบีบอัดรูปภาพ: ' + err.message, 'error');
+    }
+  }
+
+  async function downloadAllCompressImage() {
+    const compressedItems = compressImageState.items.filter(it => it.isCompressed && it.compressedBlob);
+    if (compressedItems.length === 0) {
+      showToast('ไม่มีภาพที่บีบอัดแล้วให้ดาวน์โหลด', 'warning');
+      return;
+    }
+
+    if (compressedItems.length === 1) {
+      const item = compressedItems[0];
+      const outName = getCompressedImageName(item.name, item.outputFormat);
+      downloadBlob(item.compressedBlob, outName);
+      showToast(`ดาวน์โหลด "${outName}" เรียบร้อย`, 'success');
+      return;
+    }
+
+    // Multiple -> ZIP
+    if (!window.JSZip) {
+      showToast('ไลบรารี JSZip ไม่พร้อมใช้งาน กำลังดาวน์โหลดทีละภาพ...', 'warning');
+      compressedItems.forEach(item => {
+        const outName = getCompressedImageName(item.name, item.outputFormat);
+        downloadBlob(item.compressedBlob, outName);
+      });
+      return;
+    }
+
+    showProgressModal();
+    updateProgress(0, 1, 'กำลังสร้างไฟล์ ZIP รวมรูปภาพ...');
+
+    try {
+      const zip = new window.JSZip();
+      for (const item of compressedItems) {
+        const outName = getCompressedImageName(item.name, item.outputFormat);
+        const ab = await item.compressedBlob.arrayBuffer();
+        zip.file(outName, ab);
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' }, (meta) => {
+        updateProgress(Math.round(meta.percent), 100, `กำลังบีบอัด ZIP... ${Math.round(meta.percent)}%`);
+      });
+
+      hideProgressModal();
+      downloadBlob(zipBlob, 'pdf-lab-compressed-images.zip');
+      showToast('ดาวน์โหลด ZIP รวมรูปภาพบีบอัดเรียบร้อย', 'success');
+    } catch (err) {
+      console.error('downloadAllCompressImage error:', err);
+      hideProgressModal();
+      showToast('เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP: ' + err.message, 'error');
+    }
+  }
+
   // --- Dropzone Event Helper ---
   function setupDropZoneEvents(dropZoneEl, onDropFiles) {
     if (!dropZoneEl) return;
@@ -2347,6 +3240,8 @@
     else if (toolId === 'pdf-to-image') renderPdfToImgUI();
     else if (toolId === 'page-number') renderPageNumUI();
     else if (toolId === 'ocr-pdf') renderOcrUI();
+    else if (toolId === 'compress-pdf') renderCompressPdfUI();
+    else if (toolId === 'compress-image') renderCompressImgUI();
   }
 
   // --- Initialize All PDF Lab Tools ---
@@ -2357,6 +3252,8 @@
     initPdfToImgTool();
     initPageNumTool();
     initOcrTool();
+    initCompressPdfTool();
+    initCompressImageTool();
   }
 
   window.PdfLabTools = {
@@ -2367,6 +3264,8 @@
     pdfToImgState,
     pageNumState,
     ocrState,
+    compressPdfState,
+    compressImageState,
     handleMergeFiles,
     handleSplitFile,
     handleOrganizeFile,
@@ -2374,12 +3273,16 @@
     handlePageNumFile,
     handleOcrFile,
     handleOcrFiles,
+    handleCompressPdfFiles,
+    handleCompressImageFiles,
     executeMerge,
     executeSplit,
     executeOrganize,
     executePdfToImg,
     executePageNum,
     executeOcr,
+    executeCompressPdf,
+    executeCompressImage,
     cancelOcr,
     buildSearchablePdf,
     downloadSearchablePdf,

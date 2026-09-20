@@ -78,6 +78,20 @@
       iconSvg: '<path d="M4 7V4h3"/><path d="M20 7V4h-3"/><path d="M4 17v3h3"/><path d="M20 17v3h-3"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="12" y1="9" x2="12" y2="15"/>',
       desc: 'สแกนและแปลงข้อความในรูปภาพหรือ PDF ที่สแกนมาให้เป็นข้อความที่ค้นหาและคัดลอกได้'
     },
+    'compress-pdf': {
+      id: 'compress-pdf',
+      name: 'บีบอัด PDF',
+      status: 'ready',
+      iconSvg: '<path d="M4 14h6m-6 4h6m8-8V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><polyline points="14 2 14 8 20 8"/><polyline points="16 12 12 16 8 12"/><line x1="12" y1="16" x2="12" y2="8"/>',
+      desc: 'ลดขนาดไฟล์ PDF ให้เล็กลง ประหยัดพื้นที่จัดเก็บและส่งต่อง่ายขึ้น ประมวลผลในเครื่อง 100%'
+    },
+    'compress-image': {
+      id: 'compress-image',
+      name: 'บีบอัดรูปภาพ',
+      status: 'ready',
+      iconSvg: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/><polyline points="16 7 12 11 8 7"/>',
+      desc: 'ลดขนาดไฟล์ภาพ JPG, PNG, WebP, HEIC ปรับความละเอียดและคุณภาพอย่างยืดหยุ่นในเครื่อง 100%'
+    },
     'watermark-pdf': {
       id: 'watermark-pdf',
       name: 'ใส่ลายน้ำ',
@@ -735,7 +749,9 @@
       'toolOrganizePdf',
       'toolPdfToImage',
       'toolPageNumber',
-      'toolOcrPdf'
+      'toolOcrPdf',
+      'toolCompressPdf',
+      'toolCompressImage'
     ];
     allToolViews.forEach(id => {
       const elView = document.getElementById(id);
@@ -784,7 +800,9 @@
         'organize-pdf': 'toolOrganizePdf',
         'pdf-to-image': 'toolPdfToImage',
         'page-number': 'toolPageNumber',
-        'ocr-pdf': 'toolOcrPdf'
+        'ocr-pdf': 'toolOcrPdf',
+        'compress-pdf': 'toolCompressPdf',
+        'compress-image': 'toolCompressImage'
       };
       const viewId = targetViewMap[state.activeTool];
       if (viewId) {
