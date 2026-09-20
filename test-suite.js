@@ -384,10 +384,7 @@ async function runTests() {
       'รวม PDF',
       'แยก PDF',
       'จัดหน้า PDF',
-      'PDF → รูปภาพ',
-      'ใส่เลขหน้า',
-      'OCR PDF',
-      'เพิ่มเติม'
+      'เครื่องมือทั้งหมด'
     ];
 
     const actualTools = await page.evaluate(() => {
@@ -397,11 +394,26 @@ async function runTests() {
     const toolsMatch = expectedTools.length === actualTools.length && expectedTools.every((t, i) => actualTools[i] === t);
     record('Nav 1: Top navigation renders approved tools in exact priority order', toolsMatch, `Tools: ${actualTools.join(' | ')}`);
 
+    // Helper to switch tools via Navbar Quick tools or Mega Menu
+    async function selectTool(toolId) {
+      const quick = await page.$(`.tools-nav-track > .nav-tool-item[data-tool-id="${toolId}"]`);
+      if (quick && await quick.isVisible()) {
+        await quick.click();
+        return;
+      }
+      const isMenuOpen = await page.isVisible('#megaMenuDropdown:not(.hidden)');
+      if (!isMenuOpen) {
+        await page.click('#btnMoreTools');
+        await page.waitForSelector('#megaMenuDropdown:not(.hidden)');
+      }
+      await page.click(`.mega-tool-item[data-tool-id="${toolId}"]`);
+    }
+
     // =========================================================================
     // TOOL 2: รวม PDF (MERGE PDF) QA
     // =========================================================================
     console.log('\n--- Testing Tool 2: รวม PDF (Merge PDF) ---');
-    await page.click('[data-tool-id="merge-pdf"]');
+    await selectTool('merge-pdf');
     const mergeViewVisible = await page.isVisible('#toolMergePdf');
     record('Merge 1: View switched to รวม PDF', mergeViewVisible);
 
@@ -463,7 +475,7 @@ async function runTests() {
     // TOOL 3: แยก PDF (SPLIT PDF) QA
     // =========================================================================
     console.log('\n--- Testing Tool 3: แยก PDF (Split PDF) ---');
-    await page.click('[data-tool-id="split-pdf"]');
+    await selectTool('split-pdf');
     const splitViewVisible = await page.isVisible('#toolSplitPdf');
     record('Split 1: View switched to แยก PDF', splitViewVisible);
 
@@ -505,7 +517,7 @@ async function runTests() {
     // TOOL 4: จัดหน้า PDF (ORGANIZE PDF) QA
     // =========================================================================
     console.log('\n--- Testing Tool 4: จัดหน้า PDF (Organize PDF) ---');
-    await page.click('[data-tool-id="organize-pdf"]');
+    await selectTool('organize-pdf');
     const orgViewVisible = await page.isVisible('#toolOrganizePdf');
     record('Organize 1: View switched to จัดหน้า PDF', orgViewVisible);
 
@@ -537,7 +549,7 @@ async function runTests() {
     // TOOL 5: PDF → รูปภาพ (PDF TO IMAGE) QA
     // =========================================================================
     console.log('\n--- Testing Tool 5: PDF → รูปภาพ (PDF to Image) ---');
-    await page.click('[data-tool-id="pdf-to-image"]');
+    await selectTool('pdf-to-image');
     const pdfToImgViewVisible = await page.isVisible('#toolPdfToImage');
     record('PDF to Image 1: View switched to PDF → รูปภาพ', pdfToImgViewVisible);
 
@@ -574,7 +586,7 @@ async function runTests() {
     // TOOL 6: ใส่เลขหน้า (PAGE NUMBERING) QA
     // =========================================================================
     console.log('\n--- Testing Tool 6: ใส่เลขหน้า (Page Numbering) ---');
-    await page.click('[data-tool-id="page-number"]');
+    await selectTool('page-number');
     const pageNumViewVisible = await page.isVisible('#toolPageNumber');
     record('Page Number 1: View switched to ใส่เลขหน้า', pageNumViewVisible);
 
@@ -603,7 +615,7 @@ async function runTests() {
     // TOOL 7: COMPREHENSIVE OCR PDF & IMAGE QA (TESTS A - K)
     // =========================================================================
     console.log('\n--- Testing Tool 7: OCR PDF & IMAGE (Comprehensive Suite) ---');
-    await page.click('[data-tool-id="ocr-pdf"]');
+    await selectTool('ocr-pdf');
     const ocrViewVisible = await page.isVisible('#toolOcrPdf');
     record('OCR 1: View switched to OCR PDF', ocrViewVisible);
 
@@ -913,7 +925,7 @@ async function runTests() {
 
     // TEST M, N, O: Real Browser File Picker UI Flow (Real DOM input & Button Clicks)
     console.log('Running OCR TEST M, N, O: Real Browser File Picker UI End-to-End...');
-    await page.click('button[data-tool-id="ocr-pdf"]');
+    await selectTool('ocr-pdf');
     await page.waitForTimeout(300);
     await page.click('#btnClearOcr').catch(() => {});
     await page.waitForTimeout(300);
@@ -961,20 +973,66 @@ async function runTests() {
     await page.waitForTimeout(300);
 
     // =========================================================================
-    // MORE TOOLS DROPDOWN QA
+    // CATEGORIZED MEGA MENU QA
     // =========================================================================
+    console.log('\n--- Testing Categorized Mega Menu QA ---');
+    // 1. Open Mega Menu
     await page.click('#btnMoreTools');
-    await page.click('[data-tool-id="watermark-pdf"]');
-    const watermarkComingSoon = await page.evaluate(() => {
-      const screen = document.getElementById('comingSoonScreen');
-      const badge = screen?.querySelector('.badge-lab')?.textContent.trim();
-      const isVisible = screen && !screen.classList.contains('hidden');
-      return { isVisible, badge };
+    await page.waitForTimeout(100);
+    const megaMenuState = await page.evaluate(() => {
+      const menu = document.getElementById('megaMenuDropdown');
+      const btn = document.getElementById('btnMoreTools');
+      const cats = Array.from(menu.querySelectorAll('.category-title')).map(c => c.textContent.trim());
+      const tools = Array.from(menu.querySelectorAll('.mega-tool-item')).map(t => t.dataset.toolId);
+      return {
+        isVisible: menu && !menu.classList.contains('hidden'),
+        ariaExpanded: btn ? btn.getAttribute('aria-expanded') : '',
+        categories: cats,
+        tools: tools
+      };
     });
-    record('More Tools: Dropdown tools show clean "กำลังพัฒนา" screen with PDF LAB branding', watermarkComingSoon.isVisible && watermarkComingSoon.badge === 'PDF LAB');
 
-    // Return to IMAGE -> PDF and verify workspace preserved
-    await page.click('#btnBackToImageToPdf');
+    const expectedCats = ['จัดการ PDF', 'แปลงไฟล์', 'แก้ไข PDF', 'OCR & ข้อความ'];
+    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf'];
+    const allCatsPresent = expectedCats.every(c => megaMenuState.categories.includes(c));
+    const allToolsPresent = expectedMegaToolList.every(t => megaMenuState.tools.includes(t));
+    const onlyRealTools = megaMenuState.tools.every(t => expectedMegaToolList.includes(t));
+
+    record('Mega Menu 1: Dropdown opens on click with all 4 categories and only real functional tools',
+      megaMenuState.isVisible && megaMenuState.ariaExpanded === 'true' && allCatsPresent && allToolsPresent && onlyRealTools,
+      `Categories: ${megaMenuState.categories.join(' | ')}, Tools: ${megaMenuState.tools.length}`
+    );
+
+    // 2. Keyboard accessibility: Escape key closes menu and returns focus
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+    const escapeState = await page.evaluate(() => {
+      const menu = document.getElementById('megaMenuDropdown');
+      const btn = document.getElementById('btnMoreTools');
+      return {
+        isClosed: menu.classList.contains('hidden'),
+        ariaExpanded: btn.getAttribute('aria-expanded'),
+        isFocused: document.activeElement === btn
+      };
+    });
+    record('Mega Menu 2: Pressing Escape closes menu and restores focus to trigger button',
+      escapeState.isClosed && escapeState.ariaExpanded === 'false' && escapeState.isFocused
+    );
+
+    // 3. Click outside closes menu
+    await page.click('#btnMoreTools');
+    await page.waitForTimeout(50);
+    await page.click('.product-title');
+    await page.waitForTimeout(100);
+    const outsideClosed = await page.evaluate(() => {
+      const menu = document.getElementById('megaMenuDropdown');
+      return menu.classList.contains('hidden');
+    });
+    record('Mega Menu 3: Clicking outside closes mega menu dropdown', outsideClosed);
+
+    // 4. Return to IMAGE -> PDF and verify workspace preserved
+    await page.click('.nav-brand');
+    await page.waitForTimeout(100);
     const restoredCards = await page.$$eval('#thumbnailGrid .thumb-card', elms => elms.length);
     record('Preservation: Returning to IMAGE → PDF maintains all uploaded images in memory', restoredCards > 0, `Preserved cards: ${restoredCards}`);
 

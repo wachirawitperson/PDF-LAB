@@ -138,7 +138,7 @@
     toolsNav: document.getElementById('toolsNav'),
     btnMoreTools: document.getElementById('btnMoreTools'),
     navDropdownWrapper: document.getElementById('navDropdownWrapper'),
-    moreToolsMenu: document.getElementById('moreToolsMenu'),
+    moreToolsMenu: document.getElementById('megaMenuDropdown') || document.getElementById('moreToolsMenu'),
     
     // Screens
     uploadScreen: document.getElementById('uploadScreen'),
@@ -384,8 +384,8 @@
       });
     });
 
-    // Dropdown Items
-    document.querySelectorAll('.dropdown-item').forEach(btn => {
+    // Dropdown & Mega Menu Items
+    document.querySelectorAll('.dropdown-item, .mega-tool-item').forEach(btn => {
       btn.addEventListener('click', () => {
         const toolId = btn.dataset.toolId;
         if (toolId) switchTool(toolId);
@@ -663,6 +663,24 @@
         btn.removeAttribute('aria-current');
       }
     });
+
+    // Update active highlight on mega menu items
+    document.querySelectorAll('.mega-tool-item').forEach(btn => {
+      const isCurrent = btn.dataset.toolId === toolId;
+      btn.classList.toggle('active', isCurrent);
+      if (isCurrent) {
+        btn.setAttribute('aria-current', 'true');
+      } else {
+        btn.removeAttribute('aria-current');
+      }
+    });
+
+    // Highlight More Tools button if active tool is inside the mega menu
+    const quickToolIds = ['image-to-pdf', 'merge-pdf', 'split-pdf', 'organize-pdf'];
+    if (el.btnMoreTools) {
+      const isExtendedActive = !quickToolIds.includes(toolId);
+      el.btnMoreTools.classList.toggle('active', isExtendedActive);
+    }
 
     closeMoreToolsDropdown();
 

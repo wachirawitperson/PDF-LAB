@@ -416,83 +416,136 @@ button, input, select, textarea {
   transform: rotate(180deg);
 }
 
-.nav-dropdown-menu {
+.mega-menu-dropdown {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
-  min-width: 230px;
+  min-width: 620px;
   background-color: var(--bg-panel);
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: 6px;
-  z-index: 200;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  animation: fadeInDown 0.15s ease-out;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 16px 18px;
+  z-index: 250;
+  animation: megaMenuFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@keyframes fadeInDown {
+[data-theme="light"] .mega-menu-dropdown {
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+@keyframes megaMenuFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    transform: translateY(-6px) scale(0.99);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-.dropdown-header {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 6px 10px 4px;
+.mega-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
 }
 
-.dropdown-divider {
-  height: 1px;
-  background-color: var(--border-subtle);
-  margin: 4px 0;
+.mega-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
-.dropdown-item {
+.mega-category-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  width: 100%;
+  gap: 6px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 4px;
+}
+
+.mega-category-header .category-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.mega-category-header .category-title {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.mega-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mega-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background-color var(--transition-fast);
+  width: 100%;
+  transition: all var(--transition-fast);
+  line-height: 1.3;
 }
 
-.dropdown-item:hover {
+.mega-tool-item:hover {
   background-color: var(--bg-surface-hover);
+  border-color: var(--border-subtle);
   color: var(--accent-amber);
 }
 
-.dropdown-item:focus-visible {
+.mega-tool-item:focus-visible {
   outline: 2px solid var(--accent-amber);
-  outline-offset: -2px;
+  outline-offset: -1px;
 }
 
-.dropdown-item .tag-dev {
-  margin-left: auto;
-  font-size: 10px;
-  color: var(--text-muted);
-  background-color: var(--bg-surface);
-  padding: 2px 6px;
-  border-radius: 4px;
+.mega-tool-item.active {
+  background-color: var(--accent-amber-subtle);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+.mega-tool-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.mega-tool-item:hover .mega-tool-icon,
+.mega-tool-item.active .mega-tool-icon {
+  color: var(--accent-amber);
+}
+
+.mega-tool-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fallback for legacy dropdown classes */
+.nav-dropdown-menu {
+  display: none;
 }
 
 /* Right Header Cluster */
@@ -1876,6 +1929,12 @@ select option {
   flex-shrink: 0;
 }
 
+@media (min-width: 768px) {
+  .tools-nav-track {
+    overflow: visible;
+  }
+}
+
 /* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
@@ -1899,9 +1958,21 @@ select option {
   
   .tools-nav-bar {
     order: 3;
+    flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
     margin: 4px 0 0 0;
+  }
+
+  .mega-menu-dropdown {
+    min-width: 480px;
+    max-width: 560px;
+    right: 0;
+  }
+
+  .mega-menu-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
 
   .workspace-screen {
@@ -1941,6 +2012,7 @@ select option {
 
   .tools-nav-bar {
     order: 3;
+    flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
     margin: 4px 0 0 0;
@@ -1950,6 +2022,37 @@ select option {
     padding: 6px 10px;
     font-size: 12.5px;
     gap: 5px;
+  }
+
+  .mega-menu-dropdown {
+    position: fixed;
+    top: 92px;
+    left: 12px;
+    right: 12px;
+    min-width: unset;
+    max-width: unset;
+    width: auto;
+    max-height: calc(100vh - 108px);
+    overflow-y: auto;
+    padding: 14px;
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+    border-radius: var(--radius-md);
+  }
+
+  .mega-menu-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .mega-tool-item {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 13.5px;
+  }
+
+  .mega-tool-icon {
+    width: 18px;
+    height: 18px;
   }
 
   .nav-dropdown-menu {
