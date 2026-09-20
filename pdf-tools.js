@@ -2538,7 +2538,7 @@
           if (item.hasText) {
             textStatusBadgeHtml = `<span class="badge-text-status badge-text-searchable" title="เอกสารมีข้อความที่สามารถเลือกหรือค้นหาได้">📄 ข้อความยังเลือก/ค้นหาได้</span>`;
           } else {
-            textStatusBadgeHtml = `<span class="badge-text-status badge-text-rasterized" title="เอกสารถูกแปลงเป็นภาพ ข้อความจึงไม่สามารถเลือกหรือค้นหาได้">🖼️ เอกสารภาพ (ค้นหาข้อความไม่ได้)</span>`;
+            textStatusBadgeHtml = `<span class="badge-text-status badge-text-rasterized" title="เอกสารถูกแปลงเป็นภาพ ข้อความจึงไม่สามารถเลือกหรือค้นหาได้">🖼️ เอกสารภาพ — ไม่สามารถเลือก/ค้นหาข้อความได้</span>`;
           }
         }
 

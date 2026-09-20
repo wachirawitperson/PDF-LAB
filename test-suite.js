@@ -1135,7 +1135,7 @@ async function runTests() {
     );
 
     record('Compress PDF 8: Text searchability verified (correctly flags rasterized PDF as non-searchable)',
-      compPdfResult.hasTextState === false && compPdfResult.textStatusBadge.includes('ค้นหาข้อความไม่ได้'),
+      compPdfResult.hasTextState === false && compPdfResult.textStatusBadge.includes('ไม่สามารถเลือก/ค้นหาข้อความได้'),
       `hasText: ${compPdfResult.hasTextState}, Badge: "${compPdfResult.textStatusBadge}"`
     );
 
