@@ -2885,6 +2885,32 @@ select option {
   pointer-events: none;
 }
 
+.ocr-card-confidence.ocr-conf-good {
+  background: rgba(16, 185, 129, 0.85);
+  color: #fff;
+}
+
+.ocr-card-confidence.ocr-conf-fair {
+  background: rgba(245, 158, 11, 0.85);
+  color: #fff;
+}
+
+.ocr-card-confidence.ocr-conf-low {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+}
+
+.ocr-page-item-notice {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--accent-amber);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
 .ocr-actions-row {
   display: flex;
   align-items: center;

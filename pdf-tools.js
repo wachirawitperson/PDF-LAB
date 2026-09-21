@@ -1574,7 +1574,11 @@
     btnCopy?.addEventListener('click', () => {
       const textarea = document.getElementById('ocrExtractedText');
       if (textarea && textarea.value) {
-        navigator.clipboard.writeText(textarea.value).then(() => {
+        if (!ocrState.extractedText || (ocrState.pages && ocrState.pages.length > 0 && ocrState.pages.every(p => p.qualityStatus === 'LOW'))) {
+          showToast('ไม่พบข้อความที่อ่านได้อย่างมั่นใจสำหรับคัดลอก', 'info');
+          return;
+        }
+        navigator.clipboard.writeText(ocrState.extractedText).then(() => {
           showToast('คัดลอกข้อความลงคลิปบอร์ดแล้ว', 'success');
         }).catch(() => {
           textarea.select();
@@ -1585,7 +1589,10 @@
     });
 
     btnDownloadTxt?.addEventListener('click', () => {
-      if (!ocrState.extractedText) return;
+      if (!ocrState.extractedText || (ocrState.pages && ocrState.pages.length > 0 && ocrState.pages.every(p => p.qualityStatus === 'LOW'))) {
+        showToast('ไม่พบข้อความที่อ่านได้อย่างมั่นใจสำหรับดาวน์โหลด', 'info');
+        return;
+      }
       const blob = new Blob([ocrState.extractedText], { type: 'text/plain;charset=utf-8' });
       let baseName = ocrState.outputFilename ? ocrState.outputFilename.replace(/\.pdf$/i, '') : 'ocr-extracted-text';
       downloadBlob(blob, `${baseName}.txt`);
@@ -1971,16 +1978,35 @@
     pageContainer.classList.remove('hidden');
 
     ocrState.pages.forEach(p => {
-      if (!p.text) return;
       const item = document.createElement('div');
       item.className = 'ocr-page-item';
-      item.innerHTML = `
-        <div class="ocr-page-item-header">
-          <span>หน้า ${p.pageNum}</span>
-          <span class="ocr-page-item-confidence">${p.confidence != null ? 'ความแม่นยำ: ' + p.confidence + '%' : ''}</span>
-        </div>
-        <div class="ocr-page-item-text">${escapeHtml(p.text)}</div>
-      `;
+
+      if (p.qualityStatus === 'LOW' || (!p.text && p.confidence === 0)) {
+        item.innerHTML = `
+          <div class="ocr-page-item-header">
+            <span>หน้า ${p.pageNum}</span>
+            <span class="ocr-page-item-confidence text-muted" style="background: rgba(239, 68, 68, 0.1); color: var(--color-danger, #ef4444);">คุณภาพต่ำ</span>
+          </div>
+          <div class="ocr-page-item-text text-muted" style="font-style: italic; opacity: 0.85;">ไม่พบข้อความที่อ่านได้อย่างมั่นใจ (ระบบซ่อนข้อความที่มีความน่าเชื่อถือต่ำเพื่อป้องกันข้อความผิดพลาด)</div>
+        `;
+      } else if (p.qualityStatus === 'FAIR') {
+        item.innerHTML = `
+          <div class="ocr-page-item-header">
+            <span>หน้า ${p.pageNum}</span>
+            <span class="ocr-page-item-confidence">${p.confidence != null ? 'ความแม่นยำ: ' + p.confidence + '% (ปานกลาง)' : ''}</span>
+          </div>
+          <div class="ocr-page-item-notice">⚠️ หน้านี้มีข้อความที่ OCR อ่านได้ไม่มั่นใจ ระบบจึงซ่อนข้อความที่มีความน่าเชื่อถือต่ำเพื่อป้องกันข้อความผิดพลาด</div>
+          <div class="ocr-page-item-text">${escapeHtml(p.text)}</div>
+        `;
+      } else {
+        item.innerHTML = `
+          <div class="ocr-page-item-header">
+            <span>หน้า ${p.pageNum}</span>
+            <span class="ocr-page-item-confidence">${p.confidence != null ? 'ความแม่นยำ: ' + p.confidence + '%' : ''}</span>
+          </div>
+          <div class="ocr-page-item-text">${escapeHtml(p.text)}</div>
+        `;
+      }
       pageContainer.appendChild(item);
     });
   }
@@ -2075,6 +2101,292 @@
         }
         throw err2;
       }
+    }
+  }
+
+  // --- OCR Quality Gate & Noise Suppression Engine ---
+  function evaluateOcrQuality(tessData) {
+    if (!tessData) {
+      return {
+        status: 'LOW',
+        text: '',
+        confidence: 0,
+        keptLines: [],
+        suppressedWords: [],
+        suppressedLinesCount: 0
+      };
+    }
+
+    const rawLines = tessData.lines || [];
+    const keptLines = [];
+    const suppressedLines = [];
+    const suppressedWords = [];
+
+    let totalWordConf = 0;
+    let totalWordCount = 0;
+
+    function getScript(s) {
+      if (/^[=_\-+*#~`!?:;\\/|\^]+$/.test(s)) return 'SYM';
+      if (/^[0-9.,:%]+$/.test(s)) return 'NUM';
+      if (/[\u0E00-\u0E7F]/.test(s)) return 'THAI';
+      if (/[a-zA-Z]/.test(s)) return 'LATIN';
+      return 'OTHER';
+    }
+
+    function isNoiseLine(line, avgWordConf, tokens) {
+      const lineConf = line.confidence != null ? line.confidence : 0;
+      const lineText = (line.text || '').trim();
+      if (!lineText) return true;
+
+      const totalChars = tokens.reduce((acc, t) => acc + t.text.length, 0);
+      const maxTokenLen = Math.max(...tokens.map(t => t.text.length));
+      const avgTokenLen = totalChars / tokens.length;
+      const shortTokens = tokens.filter(t => t.text.length <= 2).length;
+      const shortRatio = shortTokens / tokens.length;
+
+      // Single or double character line with no substance (e.g. circle recognized as 'ว' or '-')
+      if (tokens.length <= 2 && maxTokenLen <= 2 && avgWordConf < 75) {
+        return true;
+      }
+
+      // Count repeated symbols (e.g. = = = =, - - - -)
+      let consecutiveSymbols = 0;
+      let maxConsecutiveSymbols = 0;
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const isSym1 = /^[=_\-+*#~`!?:;\\/|\^]+$/.test(tokens[i].text);
+        const isSym2 = /^[=_\-+*#~`!?:;\\/|\^]+$/.test(tokens[i + 1].text);
+        if (isSym1 && isSym2 && tokens[i].text === tokens[i + 1].text) {
+          consecutiveSymbols++;
+          maxConsecutiveSymbols = Math.max(maxConsecutiveSymbols, consecutiveSymbols);
+        } else {
+          consecutiveSymbols = 0;
+        }
+      }
+
+      // Check valid Thai text
+      const thaiConsonantsAndVowels = tokens
+        .filter(t => /[\u0E01-\u0E4E]/.test(t.text))
+        .reduce((sum, t) => sum + (t.text.match(/[\u0E01-\u0E4E]/g) || []).length, 0);
+      const thaiTokens = tokens.filter(t => /[\u0E00-\u0E7F]/.test(t.text));
+      const avgThaiConf = thaiTokens.length > 0 
+        ? Math.round(thaiTokens.reduce((s, t) => s + t.conf, 0) / thaiTokens.length)
+        : 0;
+      const hasValidThai = (thaiConsonantsAndVowels >= 5 && avgThaiConf >= 60);
+
+      // Check valid Latin / Number anchor words
+      const anchorTokens = tokens.filter(t => {
+        if (t.conf < 75) return false;
+        if (/^[a-zA-Z0-9]+$/.test(t.text)) {
+          if (t.text.length >= 6 && t.conf >= 80) return true;
+          if (t.text.length >= 4 && t.conf >= 75) return true;
+          if (t.text.length >= 3 && t.conf >= 85) return true;
+        }
+        return false;
+      });
+
+      const hasAnchorWord = (
+        anchorTokens.some(t => t.text.length >= 6) ||
+        anchorTokens.length >= 2 ||
+        (tokens.length <= 3 && anchorTokens.length >= 1 && avgWordConf >= 80)
+      );
+
+      // Check repeated symbols
+      if (maxConsecutiveSymbols >= 1 && !hasAnchorWord) {
+        return true;
+      }
+
+      // Mixed math / comparison symbols in low/moderate confidence line without valid Thai
+      const hasMixedSymbols = tokens.some(t => /^[=_\-+*#~`!?:;\\/|<>\^]+$/.test(t.text));
+      if (hasMixedSymbols && (lineConf < 75 || avgWordConf < 75) && !hasValidThai) {
+        return true;
+      }
+
+      // Pure digit noise check (e.g. "85 7 8 2 1" mixed with Thai zero "๐")
+      const numTokens = tokens.filter(t => /^[0-9\u0E50-\u0E59.,]+$/.test(t.text)).length;
+      const isDigitNoise = (tokens.length >= 4 && numTokens >= tokens.length * 0.55 && shortRatio >= 0.70 && !hasValidThai && !hasAnchorWord);
+      if (isDigitNoise) {
+        return true;
+      }
+
+      // Protection: if line has valid Thai or strong anchor words AND good confidence:
+      if ((hasValidThai || hasAnchorWord) && (avgWordConf >= 60 || lineConf >= 60) && maxConsecutiveSymbols < 1) {
+        return false;
+      }
+
+      // Pure Latin / formula line check
+      const isAllLatinOrMath = tokens.every(t => /[a-zA-Z0-9\s.,/()\-:;"'@#$%&*+=]/.test(t.text));
+      if (isAllLatinOrMath && (avgWordConf >= 75 || lineConf >= 75) && totalChars >= 5) {
+        return false;
+      }
+
+      // High fragmentation / short average token length without valid content
+      if (avgTokenLen < 3.2 && !hasAnchorWord && !hasValidThai) {
+        return true;
+      }
+
+      if (tokens.length >= 4 && shortRatio >= 0.60 && !hasAnchorWord && !hasValidThai) {
+        return true;
+      }
+
+      // Mixed Thai + Latin character soup without coherent Thai or Latin
+      if (tokens.length >= 5 && shortRatio >= 0.50 && !hasAnchorWord && !hasValidThai) {
+        return true;
+      }
+
+      if (lineConf < 50 && !hasAnchorWord && !hasValidThai) return true;
+      if (avgWordConf < 50 && !hasAnchorWord && !hasValidThai) return true;
+
+      return false;
+    }
+
+    for (const rawLine of rawLines) {
+      const rawText = (rawLine.text || '').trim();
+      if (!rawText) continue;
+
+      const lineWords = (rawLine.words || []).filter(w => (w.text || '').trim());
+      if (lineWords.length === 0) continue;
+
+      let sumConf = 0;
+      const tokens = [];
+      for (const w of lineWords) {
+        const c = w.confidence != null ? w.confidence : 0;
+        sumConf += c;
+        tokens.push({
+          rawWord: w,
+          text: (w.text || '').trim(),
+          conf: c
+        });
+      }
+
+      const avgWordConf = Math.round(sumConf / tokens.length);
+      const isNoise = isNoiseLine(rawLine, avgWordConf, tokens);
+
+      if (isNoise) {
+        suppressedLines.push({ text: rawText, conf: rawLine.confidence, avgWordConf });
+        for (const t of tokens) {
+          suppressedWords.push(t.rawWord);
+        }
+      } else {
+        const keptTokens = [];
+        for (const t of tokens) {
+          // Token-level filtering: keep token if confident or contextual
+          if (t.conf >= 45 || (avgWordConf >= 75 && t.conf >= 30) || /[\u0E00-\u0E7F]/.test(t.text)) {
+            keptTokens.push(t);
+            totalWordConf += t.conf;
+            totalWordCount++;
+          } else {
+            suppressedWords.push(t.rawWord);
+          }
+        }
+
+        if (keptTokens.length > 0) {
+          let lineStr = keptTokens.map(t => t.text).join(' ').trim();
+          if (/[\u0E00-\u0E7F]/.test(lineStr)) {
+            lineStr = lineStr.replace(/([\u0E00-\u0E7F])\s+(?=[\u0E00-\u0E7F])/g, '$1');
+          }
+          keptLines.push({
+            text: lineStr,
+            conf: Math.max(rawLine.confidence || 0, avgWordConf),
+            tokens: keptTokens
+          });
+        }
+      }
+    }
+
+    const calculatedConfidence = totalWordCount > 0
+      ? Math.round(totalWordConf / totalWordCount)
+      : Math.round(tessData.confidence || 0);
+
+    let totalKeptChars = 0;
+    for (const kl of keptLines) {
+      totalKeptChars += kl.text.replace(/\s+/g, '').length;
+    }
+
+    let status = 'LOW';
+    // A document page with <= 2 total characters is an artifact (e.g. circle recognized as 'ว' or speckle)
+    if (totalKeptChars <= 2 || keptLines.length === 0) {
+      status = 'LOW';
+    } else {
+      if (suppressedLines.length === 0 && calculatedConfidence >= 70) {
+        status = 'GOOD';
+      } else {
+        status = 'FAIR';
+      }
+    }
+
+    const finalText = status === 'LOW' ? '' : keptLines.map(l => l.text).join('\n').trim();
+
+    return {
+      status,
+      text: finalText,
+      confidence: status === 'LOW' ? 0 : calculatedConfidence,
+      keptLines,
+      suppressedWords,
+      suppressedLinesCount: suppressedLines.length
+    };
+  }
+
+  // --- Sanitize Tesseract PDF text layer by removing suppressed noise tokens ---
+  async function sanitizeTesseractPdfStream(rawPdfBytes, wordsToSuppress) {
+    if (!rawPdfBytes || !wordsToSuppress || wordsToSuppress.length === 0) return rawPdfBytes;
+    if (!window.PDFLib || !window.PDFLib.PDFDocument) return rawPdfBytes;
+
+    try {
+      const pdfDoc = await window.PDFLib.PDFDocument.load(rawPdfBytes);
+      const pages = pdfDoc.getPages();
+      if (pages.length === 0) return rawPdfBytes;
+      const page0 = pages[0];
+      const contentsRef = page0.node.get(window.PDFLib.PDFName.of('Contents'));
+      if (!contentsRef) return rawPdfBytes;
+      const contentsStream = pdfDoc.context.lookup(contentsRef);
+      if (!contentsStream || typeof contentsStream.getContents !== 'function') return rawPdfBytes;
+
+      const compressed = contentsStream.getContents();
+      
+      // Inflate stream using native DecompressionStream
+      const ds = new DecompressionStream('deflate');
+      const writer = ds.writable.getWriter();
+      writer.write(compressed);
+      writer.close();
+      const reader = ds.readable.getReader();
+      const chunks = [];
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      let total = 0; chunks.forEach(ch => total += ch.length);
+      const uncompressed = new Uint8Array(total);
+      let offset = 0;
+      chunks.forEach(ch => { uncompressed.set(ch, offset); offset += ch.length; });
+
+      let textOps = new TextDecoder('latin1').decode(uncompressed);
+
+      function textToPdfHex(str) {
+        let hex = '';
+        for (let i = 0; i < str.length; i++) {
+          hex += str.charCodeAt(i).toString(16).padStart(4, '0').toUpperCase();
+        }
+        return hex;
+      }
+
+      for (const w of wordsToSuppress) {
+        const rawWd = (w.text || '').trim();
+        if (!rawWd) continue;
+        const hex = textToPdfHex(rawWd);
+        if (hex) {
+          const re = new RegExp('<' + hex + '(?:0020)?>', 'gi');
+          textOps = textOps.replace(re, '<>');
+        }
+      }
+
+      const newStream = pdfDoc.context.flateStream(new TextEncoder().encode(textOps));
+      page0.node.set(window.PDFLib.PDFName.of('Contents'), pdfDoc.context.register(newStream));
+
+      return await pdfDoc.save();
+    } catch (err) {
+      console.warn('sanitizeTesseractPdfStream error:', err);
+      return rawPdfBytes;
     }
   }
 
@@ -2220,26 +2532,42 @@
           pdf: true
         });
 
-        let pageText = ret.data && ret.data.text ? ret.data.text.trim() : '';
-        if (/[\u0E00-\u0E7F]/.test(pageText)) {
-          pageText = pageText.replace(/([\u0E00-\u0E7F])\s+(?=[\u0E00-\u0E7F])/g, '$1');
-        }
-        const pageConf = Math.round(ret.data && ret.data.confidence != null ? ret.data.confidence : 0);
+        // Apply OCR Output Quality Gate
+        const quality = evaluateOcrQuality(ret.data);
         const pagePdf = ret.data ? ret.data.pdf : null;
 
-        pageItem.text = pageText;
-        pageItem.confidence = pageConf;
-        pageItem.pdfBytes = pagePdf;
+        pageItem.qualityStatus = quality.status;
+        pageItem.text = quality.text;
+        pageItem.confidence = quality.confidence;
+        pageItem.suppressedLinesCount = quality.suppressedLinesCount;
+        pageItem.tessData = ret.data;
 
-        if (pageConf > 0) {
-          totalConfidenceSum += pageConf;
+        if (quality.status === 'LOW') {
+          // Do NOT inject low-confidence garbage into invisible text layer
+          pageItem.pdfBytes = null;
+        } else if (quality.status === 'FAIR') {
+          if (quality.suppressedWords && quality.suppressedWords.length > 0 && pagePdf) {
+            pageItem.pdfBytes = await sanitizeTesseractPdfStream(pagePdf, quality.suppressedWords);
+          } else {
+            pageItem.pdfBytes = pagePdf;
+          }
+        } else {
+          pageItem.pdfBytes = pagePdf;
+        }
+
+        if (quality.status !== 'LOW' && quality.confidence > 0) {
+          totalConfidenceSum += quality.confidence;
           scoredPagesCount++;
         }
 
         if (ocrState.totalPages > 1) {
-          allText += `\n--- [ หน้า ${pageNum} ] ---\n` + (pageText || '(ไม่พบข้อความ)') + '\n';
+          if (quality.status === 'LOW') {
+            allText += `\n--- [ หน้า ${pageNum} ] ---\n(ไม่พบข้อความที่อ่านได้อย่างมั่นใจ ระบบซ่อนข้อความที่มีความน่าเชื่อถือต่ำ)\n`;
+          } else {
+            allText += `\n--- [ หน้า ${pageNum} ] ---\n` + (quality.text || '(ไม่พบข้อความ)') + '\n';
+          }
         } else {
-          allText += pageText;
+          allText += quality.text;
         }
 
         // Update card in UI with confidence badge
@@ -2251,7 +2579,16 @@
             confEl.className = 'ocr-card-confidence';
             cardEl.appendChild(confEl);
           }
-          confEl.textContent = `ความแม่นยำ ${pageConf}%`;
+          if (quality.status === 'LOW') {
+            confEl.className = 'ocr-card-confidence ocr-conf-low';
+            confEl.textContent = 'คุณภาพต่ำ (ไม่พบข้อความที่มั่นใจ)';
+          } else if (quality.status === 'FAIR') {
+            confEl.className = 'ocr-card-confidence ocr-conf-fair';
+            confEl.textContent = `ความแม่นยำ ${quality.confidence}% (ปานกลาง)`;
+          } else {
+            confEl.className = 'ocr-card-confidence ocr-conf-good';
+            confEl.textContent = `ความแม่นยำ ${quality.confidence}%`;
+          }
         }
 
         // Release memory for this page
@@ -2293,20 +2630,42 @@
 
       // Calculate confidence stats
       const avgConfidence = scoredPagesCount > 0 ? Math.round(totalConfidenceSum / scoredPagesCount) : 0;
+      const allPagesLow = ocrState.pages.length > 0 && ocrState.pages.every(p => p.qualityStatus === 'LOW');
+      const somePagesFair = ocrState.pages.some(p => p.qualityStatus === 'FAIR');
+
       ocrState.overallConfidence = avgConfidence;
       ocrState.extractedText = allText.trim();
 
       if (textarea) {
-        textarea.value = ocrState.extractedText || '(ไม่พบตัวหนังสือในเอกสารนี้)';
+        if (allPagesLow || !ocrState.extractedText) {
+          textarea.value = 'หน้านี้มีข้อความที่ OCR อ่านได้ไม่มั่นใจ\nระบบจึงซ่อนข้อความที่มีความน่าเชื่อถือต่ำเพื่อป้องกันข้อความผิดพลาด';
+        } else {
+          textarea.value = ocrState.extractedText;
+        }
       }
       if (confSummary) {
-        confSummary.textContent = `อ่านแล้ว ${ocrState.totalPages} / ${ocrState.totalPages} หน้า • ความแม่นยำรวม ${avgConfidence}%`;
+        if (allPagesLow) {
+          confSummary.textContent = `อ่านแล้ว ${ocrState.totalPages} / ${ocrState.totalPages} หน้า • คุณภาพต่ำ (ระบบซ่อนข้อความความน่าเชื่อถือต่ำ)`;
+        } else if (somePagesFair) {
+          confSummary.textContent = `อ่านแล้ว ${ocrState.totalPages} / ${ocrState.totalPages} หน้า • ความแม่นยำรวม ${avgConfidence}% (ระบบซ่อนข้อความที่ไม่มั่นใจบางส่วน)`;
+        } else {
+          confSummary.textContent = `อ่านแล้ว ${ocrState.totalPages} / ${ocrState.totalPages} หน้า • ความแม่นยำรวม ${avgConfidence}%`;
+        }
       }
       if (resultsBox) resultsBox.classList.remove('hidden');
 
       const confBadge = document.getElementById('ocrConfidenceBadge');
       if (confBadge) {
-        confBadge.textContent = `ความแม่นยำรวม ${avgConfidence}%`;
+        if (allPagesLow) {
+          confBadge.textContent = 'คุณภาพ OCR: ต่ำ';
+          confBadge.className = 'badge-status badge-warning';
+        } else if (somePagesFair) {
+          confBadge.textContent = `ความแม่นยำรวม ${avgConfidence}% (ปานกลาง)`;
+          confBadge.className = 'badge-status badge-info';
+        } else {
+          confBadge.textContent = `ความแม่นยำรวม ${avgConfidence}%`;
+          confBadge.className = 'badge-status badge-success';
+        }
         confBadge.classList.remove('hidden');
       }
       const statusBadge = document.getElementById('ocrStatusBadge');

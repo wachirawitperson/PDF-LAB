@@ -968,6 +968,113 @@ async function runTests() {
     const ocrPdfExists = fs.existsSync(downloadedOcrPdfPath) && fs.statSync(downloadedOcrPdfPath).size > 1000;
     record('OCR TEST O: Searchable PDF generated and downloaded via UI button click', ocrPdfExists, `File: ${downloadedOcrPdfPath}`);
 
+    // OCR TESTS P, Q, R, S: OCR Quality Gate & Low-Confidence Noise Suppression
+    console.log('Running OCR TESTS P-S: Quality Gate & Noise Suppression...');
+    const qgResults = await page.evaluate(async () => {
+      // 1. Pure graphic noise test
+      const cG = document.createElement('canvas');
+      cG.width = 400; cG.height = 300;
+      const ctxG = cG.getContext('2d');
+      const grad = ctxG.createLinearGradient(0, 0, 400, 300);
+      grad.addColorStop(0, '#ccc'); grad.addColorStop(1, '#666');
+      ctxG.fillStyle = grad; ctxG.fillRect(0, 0, 400, 300);
+      ctxG.strokeStyle = '#222'; ctxG.lineWidth = 4;
+      ctxG.beginPath(); ctxG.arc(150, 150, 70, 0, Math.PI * 2); ctxG.stroke();
+      const bG = await new Promise(r => cG.toBlob(r, 'image/jpeg', 0.85));
+      const fileG = new File([bG], 'noise-graphic.jpg', { type: 'image/jpeg' });
+
+      await window.PdfLabTools.handleOcrFiles([fileG]);
+      await window.PdfLabTools.executeOcr();
+
+      const st1 = window.PdfLabTools.ocrState;
+      const pg1 = st1.pages[0];
+      const text1 = document.getElementById('ocrExtractedText').value;
+      const isGraphicSuppressed = (
+        pg1.qualityStatus === 'LOW' &&
+        pg1.pdfBytes === null &&
+        text1.includes('ไม่มั่นใจ')
+      );
+
+      // Copy & download guard
+      document.querySelectorAll('.toast').forEach(t => t.remove());
+      document.getElementById('btnOcrCopy').click();
+      await new Promise(r => setTimeout(r, 100));
+      const toasts1 = Array.from(document.querySelectorAll('.toast'));
+      const toastText1 = toasts1.length > 0 ? toasts1[toasts1.length - 1].textContent : '';
+      const copyGuarded = toastText1.includes('ไม่พบข้อความที่อ่านได้อย่างมั่นใจ');
+
+      // 2. Mixed document with noise lines & genuine Thai/English
+      const cM = document.createElement('canvas');
+      cM.width = 800; cM.height = 500;
+      const ctxM = cM.getContext('2d');
+      ctxM.fillStyle = '#ffffff'; ctxM.fillRect(0, 0, 800, 500);
+
+      // Scanner noise lines (the 4 user bug patterns)
+      ctxM.fillStyle = '#666666'; ctxM.font = '12px monospace';
+      ctxM.fillText('l clo ๐อ ns 85 ws 7 8 2 1', 40, 50);
+      ctxM.fillText('= E = eee ASHE = pm Bg', 40, 90);
+
+      // Genuine content
+      ctxM.fillStyle = '#111827'; ctxM.font = 'bold 24px Arial, sans-serif';
+      ctxM.fillText('โรงเรียนบ้านทางฝัน ประจำปีการศึกษา 2569', 40, 220);
+      ctxM.fillText('MIDTERM EXAMINATION REPORT 2026', 40, 270);
+      ctxM.font = '20px Arial, sans-serif';
+      ctxM.fillText('Formula: X = 25 + Y / 4 (Score = 100%)', 40, 320);
+
+      // Gutter noise
+      ctxM.fillStyle = '#777777'; ctxM.font = '11px monospace';
+      ctxM.fillText('= = = = EL Wy Coo My come i', 40, 430);
+      ctxM.fillText('Bsn pm ผู E 3 = aa poh 57 Se 2 = = = Pum', 40, 460);
+
+      const bM = await new Promise(r => cM.toBlob(r, 'image/jpeg', 0.9));
+      const fileM = new File([bM], 'mixed-quality.jpg', { type: 'image/jpeg' });
+
+      const langSelect = document.getElementById('ocrLanguage');
+      if (langSelect) langSelect.value = 'tha+eng';
+
+      await window.PdfLabTools.handleOcrFiles([fileM]);
+      await window.PdfLabTools.executeOcr();
+
+      const st2 = window.PdfLabTools.ocrState;
+      const text2 = document.getElementById('ocrExtractedText').value;
+
+      let searchableExtracted = [];
+      if (st2.searchablePdfBytes) {
+        const doc = await window.pdfjsLib.getDocument({ data: st2.searchablePdfBytes }).promise;
+        const pg = await doc.getPage(1);
+        const tc = await pg.getTextContent();
+        searchableExtracted = tc.items.map(i => i.str).filter(s => s.trim());
+        await doc.destroy();
+      }
+
+      const hasValidThai = text2.includes('โรงเรียน') && text2.includes('2569');
+      const hasValidEng = text2.includes('EXAMINATION') && text2.includes('2026');
+      const hasFormula = text2.includes('Formula') && text2.includes('Score');
+      const hasNoGarbageInText = !text2.includes('clo') && !text2.includes('ASHE') && !text2.includes('Coo') && !text2.includes('Pum');
+      const searchableHasNoise = searchableExtracted.some(s =>
+        s.includes('clo') || s.includes('ASHE') || s.includes('Wy') || s.includes('Pum')
+      );
+      const searchableHasValid = searchableExtracted.some(s =>
+        s.includes('โรงเรียน') || s.includes('2569') || s.includes('REPORT')
+      );
+
+      return {
+        isGraphicSuppressed,
+        copyGuarded,
+        hasValidThai,
+        hasValidEng,
+        hasFormula,
+        hasNoGarbageInText,
+        searchableHasNoise,
+        searchableHasValid
+      };
+    });
+
+    record('OCR TEST P: Quality Gate suppresses low-confidence noise lines and pure graphical artifacts', qgResults.isGraphicSuppressed, 'Graphic artifact suppressed to LOW status');
+    record('OCR TEST Q: Quality Gate protects valid Thai, English, formulas and numbers from mixed noisy scans', qgResults.hasValidThai && qgResults.hasValidEng && qgResults.hasFormula && qgResults.hasNoGarbageInText, 'Valid Thai & English retained without noise lines');
+    record('OCR TEST R: Searchable PDF text layer sanitization removes suppressed garbage tokens from invisible layer', !qgResults.searchableHasNoise && qgResults.searchableHasValid, 'Searchable PDF free from OCR garbage');
+    record('OCR TEST S: Copy and Download TXT guard prevents copying raw garbage on low-confidence pages', qgResults.copyGuarded, 'User notified and copying blocked on noise page');
+
     // Reset OCR
     await page.click('#btnClearOcr');
     await page.waitForTimeout(300);
