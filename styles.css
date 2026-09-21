@@ -3013,6 +3013,13 @@ select option {
   flex: 1;
 }
 
+.compress-img-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
 .compress-img-name {
   font-size: 13px;
   font-weight: 600;
@@ -3020,6 +3027,18 @@ select option {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+.compress-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background-color: var(--bg-surface);
+  color: var(--brand-blue);
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .compress-img-meta {

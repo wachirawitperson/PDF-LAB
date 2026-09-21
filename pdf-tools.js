@@ -2772,11 +2772,16 @@
   // TOOL 9: บีบอัดรูปภาพ (Compress Image)
   // ==========================================================================
   const compressImageState = {
-    items: [], // Array of { id, file, name, size, type, width, height, previewUrl, originalBlob, compressedBlob, compressedSize, isCompressed, outputWidth, outputHeight }
-    quality: 75,
-    maxDim: 'original',
+    items: [], // Array of { id, file, name, size, type, width, height, previewUrl, originalBlob, compressedBlob, compressedSize, isCompressed, outputWidth, outputHeight, outputFormat }
+    level: 'balanced', // 'high' | 'balanced' | 'small'
     format: 'original', // 'original' | 'jpeg' | 'webp' | 'png'
     isProcessing: false
+  };
+
+  const COMPRESS_IMG_LEVELS = {
+    high: { quality: 0.90, label: 'คุณภาพสูง (Quality 90%)' },
+    balanced: { quality: 0.75, label: 'สมดุล (Quality 75%)' },
+    small: { quality: 0.50, label: 'ขนาดเล็ก (Quality 50%)' }
   };
 
   function initCompressImageTool() {
@@ -2787,10 +2792,8 @@
     const btnClear = document.getElementById('btnClearCompressImg');
     const btnExecute = document.getElementById('btnExecuteCompressImg');
     const btnDownloadAll = document.getElementById('btnDownloadAllCompressImg');
-    const qualitySlider = document.getElementById('compressImgQuality');
-    const qualityBadge = document.getElementById('compressImgQualityValue');
     const formatSelect = document.getElementById('compressImgFormat');
-    const maxDimSelect = document.getElementById('compressImgMaxDim');
+    const formatNotice = document.getElementById('compressImgFormatNotice');
 
     btnSelect?.addEventListener('click', () => fileInput?.click());
     btnAddMore?.addEventListener('click', () => fileInput?.click());
@@ -2825,39 +2828,25 @@
       showToast('ล้างรายการรูปภาพทั้งหมดแล้ว', 'info');
     });
 
-    // Quality slider
-    qualitySlider?.addEventListener('input', (e) => {
-      compressImageState.quality = parseInt(e.target.value, 10);
-      if (qualityBadge) qualityBadge.textContent = `${compressImageState.quality}%`;
-
-      // Update active tick button
-      document.querySelectorAll('.slider-ticks .btn-tick').forEach(btn => {
-        const val = parseInt(btn.dataset.val, 10);
-        btn.classList.toggle('active', val === compressImageState.quality);
+    // Level selector radio changes
+    document.querySelectorAll('input[name="compressImgLevel"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        compressImageState.level = e.target.value;
+        // Update selection UI classes
+        document.querySelectorAll('.compression-level-selector .level-card').forEach(card => {
+          const input = card.querySelector('input[type="radio"]');
+          card.classList.toggle('selected', input && input.checked);
+        });
       });
     });
 
-    // Quality preset ticks
-    document.querySelectorAll('.slider-ticks .btn-tick').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const val = parseInt(btn.dataset.val, 10);
-        if (!isNaN(val) && qualitySlider) {
-          qualitySlider.value = val;
-          compressImageState.quality = val;
-          if (qualityBadge) qualityBadge.textContent = `${val}%`;
-          document.querySelectorAll('.slider-ticks .btn-tick').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-        }
-      });
-    });
-
-    // Format & Dimension controls
+    // Format control changes
     formatSelect?.addEventListener('change', (e) => {
       compressImageState.format = e.target.value;
-    });
-
-    maxDimSelect?.addEventListener('change', (e) => {
-      compressImageState.maxDim = e.target.value;
+      if (formatNotice) {
+        // Show transparency warning when JPEG is selected
+        formatNotice.classList.toggle('hidden', compressImageState.format !== 'jpeg');
+      }
     });
 
     btnExecute?.addEventListener('click', executeCompressImage);
@@ -2922,7 +2911,8 @@
           compressedSize: null,
           isCompressed: false,
           outputWidth: dimensions.width,
-          outputHeight: dimensions.height
+          outputHeight: dimensions.height,
+          outputFormat: null
         });
         loaded++;
       } catch (err) {
@@ -2978,17 +2968,35 @@
       }
     }
 
-    // Summary card
+    // Summary card with aggregate byte measurement
     if (summaryCard) {
       const compressedItems = compressImageState.items.filter(it => it.isCompressed && it.compressedBlob);
       if (compressedItems.length > 0) {
         summaryCard.classList.remove('hidden');
         const origTotal = compressedItems.reduce((acc, it) => acc + it.size, 0);
         const compTotal = compressedItems.reduce((acc, it) => acc + it.compressedSize, 0);
-        const savedBytes = Math.max(0, origTotal - compTotal);
-        const pctSaved = origTotal > 0 ? Math.round((savedBytes / origTotal) * 100) : 0;
-        if (summarySubtext) {
-          summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${pctSaved}%) จากขนาดเดิม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+        const doneCount = compressedItems.length;
+        const summaryTitle = summaryCard.querySelector('.compress-summary-title');
+
+        if (compTotal < origTotal) {
+          const savedBytes = origTotal - compTotal;
+          const pct = ((savedBytes / origTotal) * 100).toFixed(1);
+          if (summaryTitle) summaryTitle.textContent = `บีบอัดเสร็จเรียบร้อย ${doneCount}/${totalCount} ภาพ`;
+          if (summarySubtext) {
+            summarySubtext.textContent = `ประหยัดพื้นที่ได้ ${formatFileSize(savedBytes)} (${pct}%) จากขนาดรวม ${formatFileSize(origTotal)} เหลือ ${formatFileSize(compTotal)}`;
+          }
+        } else if (compTotal > origTotal) {
+          const diffBytes = compTotal - origTotal;
+          const pct = ((diffBytes / origTotal) * 100).toFixed(1);
+          if (summaryTitle) summaryTitle.textContent = `ประมวลผลเสร็จสิ้น ${doneCount}/${totalCount} ภาพ`;
+          if (summarySubtext) {
+            summarySubtext.textContent = `ชุดไฟล์นี้มีขนาดเพิ่มขึ้น ${pct}% (+${formatFileSize(diffBytes)}) จากการตั้งค่าปัจจุบัน (เดิม ${formatFileSize(origTotal)} เป็น ${formatFileSize(compTotal)})`;
+          }
+        } else {
+          if (summaryTitle) summaryTitle.textContent = `ประมวลผลเสร็จสิ้น ${doneCount}/${totalCount} ภาพ`;
+          if (summarySubtext) {
+            summarySubtext.textContent = `ขนาดไฟล์โดยรวมเท่าเดิม (${formatFileSize(compTotal)}) ไม่มีการลดขนาด`;
+          }
         }
       } else {
         summaryCard.classList.add('hidden');
@@ -3004,13 +3012,9 @@
         card.dataset.id = item.id;
 
         let resultBadgeHtml = '';
-        let dimsHtml = `${item.width} × ${item.height}`;
+        const dimsHtml = `${item.width} × ${item.height}`;
 
         if (item.isCompressed) {
-          if (item.outputWidth !== item.width || item.outputHeight !== item.height) {
-            dimsHtml = `${item.outputWidth} × ${item.outputHeight} <span class="text-muted">(${item.width}×${item.height})</span>`;
-          }
-
           const origSize = item.size;
           const compSize = item.compressedSize;
           if (compSize < origSize) {
@@ -3022,7 +3026,7 @@
             `;
           } else {
             resultBadgeHtml = `
-              <span class="compress-result-badge badge-neutral">
+              <span class="compress-result-badge badge-neutral" title="ไฟล์นี้ไม่สามารถลดขนาดได้เพิ่มเติมด้วยการตั้งค่านี้">
                 ขนาดใกล้เคียงเดิม (${formatFileSize(compSize)})
               </span>
             `;
@@ -3097,8 +3101,8 @@
 
     showProgressModal();
     const total = compressImageState.items.length;
-    const qualityRatio = compressImageState.quality / 100;
-    const maxDimension = compressImageState.maxDim === 'original' ? null : parseInt(compressImageState.maxDim, 10);
+    const currentConfig = COMPRESS_IMG_LEVELS[compressImageState.level] || COMPRESS_IMG_LEVELS.balanced;
+    const qualityRatio = currentConfig.quality;
 
     try {
       for (let i = 0; i < total; i++) {
@@ -3119,21 +3123,9 @@
           targetMime = 'image/jpeg';
         }
 
-        // Calculate target dimensions
-        let origW = item.width;
-        let origH = item.height;
-        let targetW = origW;
-        let targetH = origH;
-
-        if (maxDimension && (origW > maxDimension || origH > maxDimension)) {
-          if (origW >= origH) {
-            targetW = maxDimension;
-            targetH = Math.round((origH * maxDimension) / origW);
-          } else {
-            targetH = maxDimension;
-            targetW = Math.round((origW * maxDimension) / origH);
-          }
-        }
+        // 100% Dimension Preservation: Always keep original width and height
+        const targetW = item.width;
+        const targetH = item.height;
 
         // Render to canvas
         const img = new Image();
@@ -3148,7 +3140,7 @@
         canvas.height = targetH;
         const ctx = canvas.getContext('2d');
 
-        // PNG might need transparent background; JPEG needs white background
+        // Transparency safety: JPEG needs white background, PNG/WebP preserve transparency
         if (targetMime === 'image/jpeg') {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, targetW, targetH);
@@ -3156,13 +3148,25 @@
 
         ctx.drawImage(img, 0, 0, targetW, targetH);
 
-        // Convert canvas to Blob
+        // Convert canvas to real Blob
         const compBlob = await new Promise(resolve => {
           canvas.toBlob(resolve, targetMime, qualityRatio);
         });
 
+        // Clean up canvas memory immediately
         canvas.width = 0;
         canvas.height = 0;
+
+        // Verify dimensions and integrity by decoding back into Image
+        const verifyUrl = URL.createObjectURL(compBlob);
+        try {
+          const verifyDims = await getImageDimensions(verifyUrl);
+          if (verifyDims.width !== targetW || verifyDims.height !== targetH) {
+            console.warn(`Dimension mismatch for ${item.name}: expected ${targetW}x${targetH}, got ${verifyDims.width}x${verifyDims.height}`);
+          }
+        } finally {
+          URL.revokeObjectURL(verifyUrl);
+        }
 
         item.compressedBlob = compBlob;
         item.compressedSize = compBlob.size;

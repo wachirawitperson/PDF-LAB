@@ -547,6 +547,11 @@
         window.PdfLabTools.handleOcrFiles(imageFiles);
         return;
       }
+      if (state.activeTool === 'compress-image' && window.PdfLabTools && window.PdfLabTools.handleCompressImageFiles) {
+        showToast(`วางรูปภาพสำหรับบีบอัดจาก Clipboard สำเร็จ (${imageFiles.length} รูป)`, 'success');
+        window.PdfLabTools.handleCompressImageFiles(imageFiles);
+        return;
+      }
       showToast(`วางรูปภาพจาก Clipboard สำเร็จ (${imageFiles.length} รูป)`, 'success');
       handleFiles(imageFiles);
     }

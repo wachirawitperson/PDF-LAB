@@ -246,6 +246,15 @@
                       </svg>
                       <span class="mega-tool-name">บีบอัด PDF</span>
                     </button>
+                    <button type="button" class="mega-tool-item" data-tool-id="compress-image">
+                      <svg class="mega-tool-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <polyline points="16 7 12 11 8 7"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      <span class="mega-tool-name">บีบอัดรูปภาพ</span>
+                    </button>
                   </div>
                 </div>
 
@@ -1493,35 +1502,57 @@
                 <select class="setting-select" id="compressImgFormat">
                   <option value="original" selected>คงรูปแบบเดิม (ตามไฟล์ต้นฉบับ / JPG สำหรับ HEIC)</option>
                   <option value="jpeg">JPEG (.jpg) — เข้ากันได้สูงสุด</option>
-                  <option value="webp">WebP (.webp) — บีบอัดได้เล็กและคุณภาพดีเยี่ยม</option>
+                  <option value="webp">WebP (.webp) — บีบอัดได้เล็กและรักษาความโปร่งใส</option>
                   <option value="png">PNG (.png) — ไม่สูญเสียรายละเอียด</option>
                 </select>
-              </div>
-
-              <!-- Quality Slider & Presets -->
-              <div class="setting-group">
-                <div class="setting-label-row">
-                  <label class="setting-label" for="compressImgQuality">คุณภาพของภาพ (Quality):</label>
-                  <span class="setting-value-badge" id="compressImgQualityValue">75%</span>
-                </div>
-                <input type="range" class="setting-slider" id="compressImgQuality" min="10" max="100" value="75" step="5">
-                <div class="slider-ticks">
-                  <button type="button" class="btn-tick" data-val="50">ประหยัด 50%</button>
-                  <button type="button" class="btn-tick active" data-val="75">สมดุล 75%</button>
-                  <button type="button" class="btn-tick" data-val="90">คมชัดสูง 90%</button>
+                <div class="warning-callout-card hidden" id="compressImgFormatNotice" style="margin-top: 8px;">
+                  ⚠️ <strong>ข้อควรระวัง:</strong> การแปลงเป็น JPEG จะทำให้พื้นหลังโปร่งใส (Alpha / Transparency) กลายเป็นสีขาว
                 </div>
               </div>
 
-              <!-- Resize Dimension Constraint -->
+              <!-- Compression Level Selector (3 Standard Levels) -->
               <div class="setting-group">
-                <label class="setting-label" for="compressImgMaxDim">จำกัดขนาดด้านที่ยาวที่สุด (Max Dimension):</label>
-                <select class="setting-select" id="compressImgMaxDim">
-                  <option value="original" selected>ขนาดเดิม (ไม่ลดขนาด Pixel)</option>
-                  <option value="2560">2560 px (2K QHD)</option>
-                  <option value="1920">1920 px (Full HD — แนะนำ)</option>
-                  <option value="1280">1280 px (HD)</option>
-                  <option value="800">800 px (สำหรับเว็บ/แชท)</option>
-                </select>
+                <label class="setting-label">ระดับการบีบอัด (Compression Level):</label>
+                <div class="compression-level-selector" role="radiogroup" aria-label="ระดับการบีบอัดรูปภาพ">
+                  <label class="level-card" for="compImgLvlHigh">
+                    <input type="radio" name="compressImgLevel" id="compImgLvlHigh" value="high">
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-high"></span>
+                        <span class="level-name">คุณภาพสูง (High Quality)</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดไฟล์เล็กน้อย เน้นรักษาความคมชัดสูงสุด (Quality ~90%)</p>
+                    </div>
+                  </label>
+
+                  <label class="level-card selected" for="compImgLvlBalanced">
+                    <input type="radio" name="compressImgLevel" id="compImgLvlBalanced" value="balanced" checked>
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-balanced"></span>
+                        <span class="level-name">สมดุล (Balanced) — แนะนำ</span>
+                        <span class="badge-recommended">แนะนำ</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดไฟล์และรักษาคุณภาพอย่างสมดุล (Quality ~75%)</p>
+                    </div>
+                  </label>
+
+                  <label class="level-card" for="compImgLvlSmall">
+                    <input type="radio" name="compressImgLevel" id="compImgLvlSmall" value="small">
+                    <div class="level-card-body">
+                      <div class="level-card-header">
+                        <span class="level-dot dot-small"></span>
+                        <span class="level-name">ขนาดเล็ก (Small Size)</span>
+                      </div>
+                      <p class="level-desc">ลดขนาดไฟล์มากที่สุด เหมาะสำหรับส่งต่อหรืออัปโหลด (Quality ~50%)</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Dimension Preservation Guarantee -->
+              <div class="callout-note" id="compressImgPreserveNotice">
+                ℹ️ <strong>คงขนาดมิติเดิม 100%:</strong> ระบบจะคงความกว้างและความสูง (Pixels) ของภาพเดิมไว้ โดยบีบอัดเฉพาะข้อมูลบิตเรตของภาพ ไม่มีการย่อขนาดรูปภาพ
               </div>
 
               <!-- Action Button -->

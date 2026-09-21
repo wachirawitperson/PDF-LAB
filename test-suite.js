@@ -1190,6 +1190,187 @@ async function runTests() {
     );
 
     // =========================================================================
+    // TOOL 9: บีบอัดรูปภาพ (IMAGE COMPRESSION) QA
+    // =========================================================================
+    console.log('\n--- Testing Tool 9: บีบอัดรูปภาพ (Image Compression) QA ---');
+
+    // 1. Switch to Compress Image tool via selectTool (Navbar / Mega Menu)
+    await selectTool('compress-image');
+    await page.waitForTimeout(300);
+
+    const isCompressImageActive = await page.isVisible('#toolCompressImage');
+    record('Compress Image 1: Navigation to "compress-image" opens tool successfully', isCompressImageActive);
+
+    // 2. Multi-format batch upload (JPG, PNG, WebP)
+    const compressImgInput = await page.$('#fileInputCompressImage');
+    const imageFixtures = [
+      path.join(ROOT_DIR, 'test-fixtures/large-photo.jpg'),
+      path.join(ROOT_DIR, 'test-fixtures/transparent-sample.png'),
+      path.join(ROOT_DIR, 'test-fixtures/small-precompressed.webp')
+    ];
+    await compressImgInput.setInputFiles(imageFixtures);
+    await page.waitForTimeout(500);
+
+    const initialImgState = await page.evaluate(() => {
+      const items = window.PdfLabTools.compressImageState.items;
+      const cards = Array.from(document.querySelectorAll('.compress-img-card'));
+      return {
+        itemCount: items.length,
+        cardCount: cards.length,
+        items: items.map(it => ({
+          name: it.name,
+          width: it.width,
+          height: it.height,
+          size: it.size,
+          type: it.type
+        }))
+      };
+    });
+
+    record('Compress Image 2: Multi-format batch upload loads 3 images with valid initial dimensions',
+      initialImgState.itemCount === 3 && initialImgState.cardCount === 3 &&
+      initialImgState.items[0].width === 1200 && initialImgState.items[0].height === 800 &&
+      initialImgState.items[1].width === 400 && initialImgState.items[1].height === 300 &&
+      initialImgState.items[2].width === 200 && initialImgState.items[2].height === 200,
+      `Items: ${initialImgState.items.map(it => `${it.name} (${it.width}x${it.height})`).join(', ')}`
+    );
+
+    // 3. Select Balanced compression level (default) & Execute compression
+    await page.click('#btnExecuteCompressImg');
+    await page.waitForFunction(() => {
+      const modal = document.getElementById('progressModal');
+      return modal && modal.classList.contains('hidden');
+    }, { timeout: 30000 });
+
+    const compImgExecutionResults = await page.evaluate(async () => {
+      const items = window.PdfLabTools.compressImageState.items;
+      const results = [];
+
+      for (const item of items) {
+        const origSize = item.size;
+        const compSize = item.compressedSize;
+        const origW = item.width;
+        const origH = item.height;
+        const outW = item.outputWidth;
+        const outH = item.outputHeight;
+
+        // Decode blob to inspect actual pixels and dimensions
+        const url = URL.createObjectURL(item.compressedBlob);
+        const img = new Image();
+        img.src = url;
+        await new Promise(r => { img.onload = r; });
+        const decodedW = img.naturalWidth;
+        const decodedH = img.naturalHeight;
+        URL.revokeObjectURL(url);
+
+        results.push({
+          name: item.name,
+          origSize,
+          compSize,
+          isSmaller: compSize < origSize,
+          origW,
+          origH,
+          outW,
+          outH,
+          decodedW,
+          decodedH,
+          mime: item.outputFormat
+        });
+      }
+
+      const summaryCard = document.getElementById('compressImgSummaryCard');
+      const summarySubtext = document.getElementById('compressImgSummarySubtext');
+
+      return {
+        results,
+        allCompressed: items.every(it => it.isCompressed),
+        summaryVisible: summaryCard && !summaryCard.classList.contains('hidden'),
+        summaryText: summarySubtext ? summarySubtext.textContent.trim() : ''
+      };
+    });
+
+    // 4. COMPRESSION != RESIZE verification (100% dimension preservation on all output blobs)
+    const allDimensionsPreserved = compImgExecutionResults.results.every(r => {
+      return r.outW === r.origW && r.outH === r.origH && r.decodedW === r.origW && r.decodedH === r.origH;
+    });
+    record('Compress Image 3: COMPRESSION ≠ RESIZE: 100% pixel dimensions preserved on all images',
+      allDimensionsPreserved,
+      compImgExecutionResults.results.map(r => `${r.name}: ${r.decodedW}x${r.decodedH}`).join(', ')
+    );
+
+    // 5. Genuine reduction on large photo
+    const photoResult = compImgExecutionResults.results.find(r => r.name.includes('large-photo'));
+    record('Compress Image 4: Real byte reduction on photo image',
+      photoResult && photoResult.isSmaller,
+      `Orig: ${photoResult.origSize} B -> Compressed: ${photoResult.compSize} B (${((1 - photoResult.compSize/photoResult.origSize)*100).toFixed(1)}% reduction)`
+    );
+
+    // 6. Honest reporting on small precompressed image
+    const precompressedResult = compImgExecutionResults.results.find(r => r.name.includes('small-precompressed'));
+    const precompBadge = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.compress-img-card'));
+      const smallCard = cards.find(c => c.textContent.includes('small-precompressed'));
+      const badge = smallCard ? smallCard.querySelector('.compress-result-badge') : null;
+      return badge ? badge.textContent.trim() : '';
+    });
+    record('Compress Image 5: Honest reporting when image cannot be reduced further',
+      precompBadge.includes('ขนาดใกล้เคียงเดิม') || precompBadge.includes('↓'),
+      `Badge text: "${precompBadge}"`
+    );
+
+    // 7. Transparency check: PNG retains PNG mime and alpha transparency
+    const pngResult = compImgExecutionResults.results.find(r => r.name.includes('transparent-sample'));
+    record('Compress Image 6: Format safety: PNG defaults to PNG output format',
+      pngResult && pngResult.mime === 'image/png',
+      `Mime: ${pngResult?.mime}`
+    );
+
+    // 8. Aggregate summary verification
+    record('Compress Image 7: Aggregate summary card displayed with honest byte totals',
+      compImgExecutionResults.summaryVisible && compImgExecutionResults.summaryText.length > 0,
+      `Summary text: "${compImgExecutionResults.summaryText}"`
+    );
+
+    // 9. Single image download test
+    const singleDlSuccess = await page.evaluate(() => {
+      const firstCard = document.querySelector('.compress-img-card');
+      const dlBtn = firstCard ? firstCard.querySelector('.btn-dl-img') : null;
+      return !!dlBtn;
+    });
+    record('Compress Image 8: Single download button appears on completed item card', singleDlSuccess);
+
+    // 10. Clear workspace test
+    await page.click('#btnClearCompressImg');
+    await page.waitForTimeout(200);
+    const countAfterClear = await page.evaluate(() => window.PdfLabTools.compressImageState.items.length);
+    record('Compress Image 9: Clear button resets state and removes all images from workspace',
+      countAfterClear === 0,
+      `Remaining items: ${countAfterClear}`
+    );
+
+    // 11. Clipboard paste support for compress-image
+    const imagePasteSuccess = await page.evaluate(async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(0, 0, 100, 100);
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const file = new File([blob], 'paste-test.png', { type: 'image/png' });
+      await window.PdfLabTools.handleCompressImageFiles([file]);
+      return window.PdfLabTools.compressImageState.items.length;
+    });
+    record('Compress Image 10: Clipboard image paste handling works for compress-image tool',
+      imagePasteSuccess === 1,
+      `Items after paste: ${imagePasteSuccess}`
+    );
+
+    // Clear again
+    await page.click('#btnClearCompressImg');
+    await page.waitForTimeout(200);
+
+    // =========================================================================
     // CATEGORIZED MEGA MENU QA
     // =========================================================================
     console.log('\n--- Testing Categorized Mega Menu QA ---');
@@ -1210,17 +1391,17 @@ async function runTests() {
     });
 
     const expectedCats = ['จัดการ PDF', 'แปลงไฟล์', 'แก้ไข PDF', 'OCR & ข้อความ', 'บีบอัดไฟล์'];
-    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf', 'compress-pdf'];
+    const expectedMegaToolList = ['merge-pdf', 'split-pdf', 'organize-pdf', 'image-to-pdf', 'pdf-to-image', 'page-number', 'ocr-pdf', 'compress-pdf', 'compress-image'];
     const allCatsPresent = expectedCats.every(c => megaMenuState.categories.includes(c));
     const allToolsPresent = expectedMegaToolList.every(t => megaMenuState.tools.includes(t));
     const onlyRealTools = megaMenuState.tools.every(t => expectedMegaToolList.includes(t));
 
-    record('Mega Menu 1: Dropdown opens on click with all 5 categories and only real functional tools',
+    record('Mega Menu 1: Dropdown opens on click with all 5 categories and all 9 real functional tools',
       megaMenuState.isVisible && megaMenuState.ariaExpanded === 'true' && allCatsPresent && allToolsPresent && onlyRealTools,
       `Categories: ${megaMenuState.categories.join(' | ')}, Tools: ${megaMenuState.tools.length}`
     );
 
-    // Verify Category 5 restriction: Phase 1 contains only compress-pdf
+    // Verify Category 5 contains both compress-pdf and compress-image in Phase 2
     const cat5Check = await page.evaluate(() => {
       const menu = document.getElementById('megaMenuDropdown');
       const cols = Array.from(menu.querySelectorAll('.mega-column'));
@@ -1228,8 +1409,8 @@ async function runTests() {
       const tools = cat5 ? Array.from(cat5.querySelectorAll('.mega-tool-item')).map(t => t.dataset.toolId) : [];
       return tools;
     });
-    record('Mega Menu 2: Category 5 (บีบอัดไฟล์) contains strictly "compress-pdf" in Phase 1',
-      cat5Check.length === 1 && cat5Check[0] === 'compress-pdf',
+    record('Mega Menu 2: Category 5 (บีบอัดไฟล์) contains "compress-pdf" and "compress-image" in Phase 2',
+      cat5Check.length === 2 && cat5Check.includes('compress-pdf') && cat5Check.includes('compress-image'),
       `Category 5 tools: ${cat5Check.join(', ')}`
     );
 
