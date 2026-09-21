@@ -859,6 +859,9 @@
         if (btnNext) btnNext.disabled = index === state.items.length - 1;
       });
     }
+
+    // Constrain grid when only 1 image is loaded
+    el.thumbnailGrid.classList.toggle('single-item', state.items.length === 1);
   }
 
   // Create single card element

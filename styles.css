@@ -1067,9 +1067,14 @@ button, input, select, textarea {
 /* Thumbnail Grid */
 .thumbnail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 18px;
   padding-bottom: 40px;
+}
+
+/* Single-image: constrain card so it doesn't stretch full-width */
+.thumbnail-grid.single-item {
+  grid-template-columns: minmax(180px, 280px);
 }
 
 /* Thumbnail Card */
@@ -2061,7 +2066,7 @@ select option {
   }
   
   .thumbnail-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 14px;
   }
 }
