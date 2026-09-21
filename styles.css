@@ -991,8 +991,6 @@ button, input, select, textarea {
   color: var(--accent-amber);
 }
 
-}
-
 /* ==========================================================================
    STATE 2: Workspace Screen (2-Column Editor)
    ========================================================================== */
@@ -1879,9 +1877,9 @@ select option {
 .toast-container {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  left: 24px;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 10px;
   z-index: 1100;
   max-width: 400px;
@@ -3129,8 +3127,12 @@ select option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 380px;
   gap: 0;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
   min-height: calc(100vh - 56px);
   background-color: var(--bg-workspace);
+  overflow: hidden;
+  width: 100%;
 }
 
 /* Left Pane: Document Workbench */
@@ -3138,7 +3140,8 @@ select option {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: calc(100vh - 56px);
+  height: 100%;
+  max-height: 100%;
   position: relative;
   background-color: var(--bg-workspace);
   border-right: 1px solid var(--border-subtle);
@@ -3284,13 +3287,14 @@ select option {
 /* Comparison Container (True Side-by-Side) */
 .workbench-comparison-container {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: 18px;
+  gap: 20px;
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
+  margin: auto;
   transition: transform var(--transition-fast);
 }
 
@@ -3308,8 +3312,7 @@ select option {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 500px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   padding: 0 4px;
 }
 
@@ -3343,15 +3346,22 @@ select option {
   align-items: center;
   justify-content: center;
   background-color: #ffffff;
-  border-radius: 3px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 [data-theme="light"] .workbench-canvas-frame {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
   border-color: rgba(0, 0, 0, 0.1);
+}
+
+.workbench-canvas-frame:has(#compressPdfEmptyPlaceholder:not(.hidden)) {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
 .workbench-canvas {
@@ -3368,14 +3378,13 @@ select option {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 28px 20px;
+  padding: 24px 20px;
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius-md);
   background-color: rgba(255, 255, 255, 0.02);
   color: var(--text-muted);
-  min-height: 280px;
   width: 100%;
-  max-width: 400px;
+  height: 100%;
   box-sizing: border-box;
 }
 
@@ -3680,8 +3689,10 @@ select option {
   }
 
   .workbench-toolbar {
-    bottom: 80px;
-    padding: 4px 10px;
+    position: static;
+    transform: none;
+    margin: 8px auto;
+    padding: 5px 12px;
     gap: 10px;
   }
 

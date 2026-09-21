@@ -2666,18 +2666,21 @@
       // Calculate Scale dynamically based on available Stage container dimensions
       let renderScale = compressPdfState.zoomScale;
       if (compressPdfState.fitMode && stage) {
-        const isDualPane = activeItem.isCompressed && compressPdfState.compressedDoc && window.innerWidth > 768;
-        const availableW = Math.max(200, (stage.clientWidth - (isDualPane ? 80 : 50)) / (isDualPane ? 2 : 1));
-        const availableH = Math.max(200, stage.clientHeight - 130);
+        const isDualPane = window.innerWidth > 768;
+        const availableW = Math.max(160, (stage.clientWidth - (isDualPane ? 90 : 36)) / (isDualPane ? 2 : 1));
+        const availableH = Math.max(160, stage.clientHeight - 120);
         const scaleW = availableW / vp1.width;
         const scaleH = availableH / vp1.height;
         renderScale = Math.min(scaleW, scaleH, 1.8);
-        renderScale = Math.max(0.3, renderScale);
+        renderScale = Math.max(0.2, renderScale);
         compressPdfState.zoomScale = renderScale;
       }
 
       if (btnZoomFit) btnZoomFit.classList.toggle('active', compressPdfState.fitMode);
       if (zoomLabel) zoomLabel.textContent = `${Math.round(renderScale * 100)}%`;
+
+      const frameOrig = document.getElementById('compressPdfCanvasFrameOriginal');
+      const frameComp = document.getElementById('compressPdfCanvasFrameCompressed');
 
       // Render Original Canvas
       if (canvasOrig) {
@@ -2686,6 +2689,15 @@
         canvasOrig.height = Math.round(vpOrig.height);
         const ctxOrig = canvasOrig.getContext('2d');
         await pageOrig.render({ canvasContext: ctxOrig, viewport: vpOrig }).promise;
+
+        if (frameOrig) {
+          frameOrig.style.width = `${Math.round(vpOrig.width)}px`;
+          frameOrig.style.height = `${Math.round(vpOrig.height)}px`;
+        }
+        if (frameComp && (!activeItem.isCompressed || !compressPdfState.compressedDoc)) {
+          frameComp.style.width = `${Math.round(vpOrig.width)}px`;
+          frameComp.style.height = `${Math.round(vpOrig.height)}px`;
+        }
       }
 
       // Render Compressed Canvas (if available from actual output Blob)
@@ -2705,6 +2717,11 @@
           await pageComp.render({ canvasContext: ctxComp, viewport: vpComp }).promise;
           canvasComp.classList.remove('hidden');
           if (placeholder) placeholder.classList.add('hidden');
+
+          if (frameComp) {
+            frameComp.style.width = `${Math.round(vpComp.width)}px`;
+            frameComp.style.height = `${Math.round(vpComp.height)}px`;
+          }
         }
 
         if (compMeta) {
