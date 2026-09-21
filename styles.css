@@ -1575,16 +1575,95 @@ button, input, select, textarea {
   box-shadow: 0 0 0 3px var(--accent-amber-glow);
 }
 
-/* Ensure dropdown options have clean readable black text on native OS dropdown menus */
+/* Universal Form Controls across all tools (Light & Dark mode aware) */
+select,
+input[type="text"],
+input[type="number"],
+input[type="search"],
+textarea,
+.setting-select,
+.text-input,
+.select-control,
+.form-control,
+.input-text {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  transition: all var(--transition-fast);
+}
+
+select:hover,
+input[type="text"]:hover,
+input[type="number"]:hover,
+input[type="search"]:hover,
+textarea:hover,
+.setting-select:hover,
+.text-input:hover,
+.select-control:hover,
+.form-control:hover,
+.input-text:hover {
+  border-color: var(--border-strong);
+}
+
+select:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+textarea:focus,
+.setting-select:focus,
+.text-input:focus,
+.select-control:focus,
+.form-control:focus,
+.input-text:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-amber-glow);
+}
+
+select:disabled,
+input:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: var(--bg-surface-active);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.setting-select {
+  width: 100%;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 14px;
+}
+
+/* Ensure dropdown options have clean readable text on native OS dropdown menus */
 select option {
-  background-color: #ffffff;
-  color: #000000 !important;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
   padding: 8px 12px;
+}
+
+[data-theme="dark"] select option {
+  background-color: #1e293b;
+  color: #f1f5f9 !important;
 }
 
 [data-theme="light"] select option {
   background-color: #ffffff;
-  color: #000000 !important;
+  color: #0f172a !important;
 }
 
 .select-wrapper::after {
@@ -2311,6 +2390,265 @@ select option {
 .btn-remove-file:hover {
   color: var(--danger);
   background-color: rgba(239, 68, 68, 0.12);
+}
+
+/* ==========================================================================
+   Merge PDF — Visual Page Workspace (Compact Top Bar & Thumbnails)
+   ========================================================================== */
+.merge-page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.merge-page-card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+}
+
+.merge-page-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.merge-page-card:active {
+  cursor: grabbing;
+}
+
+.merge-page-card.sortable-ghost {
+  opacity: 0.35;
+  border: 2px dashed #2563eb;
+  background-color: rgba(37, 99, 235, 0.05);
+}
+
+/* Card Header: Single Compact Horizontal Row */
+.merge-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background-color: var(--bg-surface-subtle, rgba(255, 255, 255, 0.02));
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 6px;
+  min-height: 38px;
+}
+
+[data-theme="light"] .merge-card-header {
+  background-color: #f8fafc;
+}
+
+.merge-card-header-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.merge-page-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #2563eb;
+  background-color: rgba(37, 99, 235, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .merge-page-badge {
+  color: #60a5fa;
+  background-color: rgba(59, 130, 246, 0.18);
+}
+
+.merge-orig-page {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Action Buttons: Horizontal pair, compact, clear contrast, touch targets */
+.merge-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-merge-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  padding: 0;
+  position: relative;
+}
+
+/* Expand touch target hit area */
+.btn-merge-action::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -4px;
+  right: -4px;
+}
+
+/* Rotate: Blue Tint */
+.btn-merge-rotate {
+  color: #2563eb;
+  background-color: rgba(37, 99, 235, 0.10);
+  border-color: rgba(37, 99, 235, 0.20);
+}
+
+.btn-merge-rotate:hover {
+  color: #1d4ed8;
+  background-color: rgba(37, 99, 235, 0.22);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+[data-theme="dark"] .btn-merge-rotate {
+  color: #60a5fa;
+  background-color: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.30);
+}
+
+[data-theme="dark"] .btn-merge-rotate:hover {
+  color: #93c5fd;
+  background-color: rgba(59, 130, 246, 0.28);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+/* Delete: Red Tint */
+.btn-merge-delete {
+  color: #dc2626;
+  background-color: rgba(220, 38, 38, 0.10);
+  border-color: rgba(220, 38, 38, 0.20);
+}
+
+.btn-merge-delete:hover {
+  color: #b91c1c;
+  background-color: rgba(220, 38, 38, 0.22);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+
+[data-theme="dark"] .btn-merge-delete {
+  color: #f87171;
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.30);
+}
+
+[data-theme="dark"] .btn-merge-delete:hover {
+  color: #fca5a5;
+  background-color: rgba(239, 68, 68, 0.28);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+/* Card Body / Thumbnail (Contain, no stretch) */
+.merge-card-thumb-frame {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0b0d10;
+  padding: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+[data-theme="light"] .merge-card-thumb-frame {
+  background-color: #f1f5f9;
+}
+
+.merge-card-thumb-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  border-radius: 2px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #ffffff;
+}
+
+.merge-thumb-skeleton {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* Card Footer: Compact Source File Info */
+.merge-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+  gap: 6px;
+}
+
+.merge-file-tag {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.merge-file-page-tag {
+  flex-shrink: 0;
+  opacity: 0.8;
+  font-size: 10.5px;
+}
+
+/* Mobile Responsiveness for Merge Grid */
+@media (max-width: 767px) {
+  .merge-page-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .merge-card-thumb-frame {
+    height: 140px;
+  }
+
+  .btn-merge-action {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 380px) {
+  .merge-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .merge-card-thumb-frame {
+    height: 180px;
+  }
 }
 
 /* Selectable Cards (Split & PDF-to-Image) */

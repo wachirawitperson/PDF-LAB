@@ -123,7 +123,9 @@
   // ==========================================================================
   const mergeState = {
     files: [], // Array of { id, file, name, size, pageCount, buffer }
-    sortable: null
+    pages: [], // Array of { id, fileId, fileName, originalPageNum, rotation, dataUrl }
+    sortable: null,
+    hasCustomPageDrag: false
   };
 
   function initMergeTool() {
@@ -155,6 +157,8 @@
 
     btnClear?.addEventListener('click', () => {
       mergeState.files = [];
+      mergeState.pages = [];
+      mergeState.hasCustomPageDrag = false;
       renderMergeUI();
       showToast('ล้างรายการไฟล์ PDF ทั้งหมดแล้ว', 'info');
     });
@@ -178,14 +182,28 @@
       updateProgress(i + 1, pdfFiles.length, `กำลังอ่าน "${file.name}"...`);
       try {
         const loadedPdf = await loadPdfDocument(file);
-        mergeState.files.push({
-          id: 'merge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+        const fileId = 'merge_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        const fileObj = {
+          id: fileId,
           file,
           name: file.name,
           size: file.size,
           pageCount: loadedPdf.pageCount,
           buffer: loadedPdf.buffer
-        });
+        };
+        mergeState.files.push(fileObj);
+
+        // Generate individual page records for Visual Page Workspace
+        for (let p = 1; p <= loadedPdf.pageCount; p++) {
+          mergeState.pages.push({
+            id: 'page_' + fileId + '_' + p,
+            fileId: fileId,
+            fileName: file.name,
+            originalPageNum: p,
+            rotation: 0,
+            dataUrl: null
+          });
+        }
         loaded++;
       } catch (err) {
         console.warn('Merge PDF Load Error:', err);
@@ -200,7 +218,51 @@
     }
   }
 
+  function syncMergeState() {
+    const fileMap = new Map(mergeState.files.map(f => [f.id, f]));
+    
+    // 1. Remove pages whose fileId is no longer in mergeState.files
+    mergeState.pages = mergeState.pages.filter(p => fileMap.has(p.fileId));
+
+    // 2. If there are files with no pages in mergeState.pages (e.g. injected externally), add them
+    mergeState.files.forEach(f => {
+      const existing = mergeState.pages.filter(p => p.fileId === f.id);
+      if (existing.length === 0 && f.pageCount > 0) {
+        for (let p = 1; p <= f.pageCount; p++) {
+          mergeState.pages.push({
+            id: 'page_' + f.id + '_' + p,
+            fileId: f.id,
+            fileName: f.name,
+            originalPageNum: p,
+            rotation: 0,
+            dataUrl: null
+          });
+        }
+      }
+    });
+
+    // 3. If no custom dragging occurred at the page level, sort pages by current file order
+    if (!mergeState.hasCustomPageDrag) {
+      const fileOrderMap = new Map();
+      mergeState.files.forEach((f, idx) => fileOrderMap.set(f.id, idx));
+      mergeState.pages.sort((a, b) => {
+        const orderA = fileOrderMap.has(a.fileId) ? fileOrderMap.get(a.fileId) : 999;
+        const orderB = fileOrderMap.has(b.fileId) ? fileOrderMap.get(b.fileId) : 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.originalPageNum - b.originalPageNum;
+      });
+    }
+
+    // 4. Keep each file's pageCount property strictly synced with remaining pages in mergeState.pages
+    mergeState.files.forEach(f => {
+      const remainingCount = mergeState.pages.filter(p => p.fileId === f.id).length;
+      f.pageCount = remainingCount;
+    });
+  }
+
   function renderMergeUI() {
+    syncMergeState();
+
     const uploadScreen = document.getElementById('mergeUploadScreen');
     const workspaceScreen = document.getElementById('mergeWorkspaceScreen');
     const fileListEl = document.getElementById('mergeFileList');
@@ -210,7 +272,7 @@
 
     if (!uploadScreen || !workspaceScreen) return;
 
-    if (mergeState.files.length === 0) {
+    if (mergeState.files.length === 0 || mergeState.pages.length === 0) {
       uploadScreen.classList.remove('hidden');
       workspaceScreen.classList.add('hidden');
       if (fileListEl) fileListEl.innerHTML = '';
@@ -220,70 +282,126 @@
     uploadScreen.classList.add('hidden');
     workspaceScreen.classList.remove('hidden');
 
-    const totalPages = mergeState.files.reduce((acc, f) => acc + f.pageCount, 0);
-    if (countBadge) countBadge.textContent = `${mergeState.files.length} ไฟล์`;
+    const totalPages = mergeState.pages.length;
+    if (countBadge) countBadge.textContent = `${mergeState.files.length} ไฟล์ • ${totalPages} หน้า`;
     if (summaryFiles) summaryFiles.textContent = `${mergeState.files.length} ไฟล์`;
     if (summaryPages) summaryPages.textContent = `${totalPages} หน้า`;
 
-    if (fileListEl) {
-      fileListEl.innerHTML = '';
-      mergeState.files.forEach((item, idx) => {
-        const card = document.createElement('div');
-        card.className = 'pdf-file-item';
-        card.dataset.id = item.id;
-        card.innerHTML = `
-          <div class="pdf-file-handle" title="ลากเพื่อสลับตำแหน่ง">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
-          </div>
-          <span class="pdf-file-index">#${idx + 1}</span>
-          <div class="pdf-file-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          </div>
-          <div class="pdf-file-info">
-            <span class="pdf-file-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
-            <div class="pdf-file-meta">
-              <span>${item.pageCount} หน้า</span>
-              <span>•</span>
-              <span>${formatFileSize(item.size)}</span>
-            </div>
-          </div>
-          <button type="button" class="btn-remove-file" title="ลบไฟล์นี้ออก" aria-label="ลบไฟล์">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        `;
+    if (!fileListEl) return;
+    fileListEl.innerHTML = '';
 
-        card.querySelector('.btn-remove-file').addEventListener('click', () => {
-          const index = mergeState.files.findIndex(f => f.id === item.id);
-          if (index !== -1) {
-            mergeState.files.splice(index, 1);
-            renderMergeUI();
-          }
-        });
+    const fileBufferMap = new Map(mergeState.files.map(f => [f.id, f.buffer]));
 
-        fileListEl.appendChild(card);
+    mergeState.pages.forEach((pageItem, idx) => {
+      const card = document.createElement('div');
+      card.className = 'merge-page-card';
+      card.dataset.id = pageItem.id;
+      card.dataset.fileId = pageItem.fileId;
+
+      card.innerHTML = `
+        <div class="merge-card-header">
+          <div class="merge-card-header-left">
+            <span class="merge-page-badge">#${idx + 1}</span>
+            <span class="merge-orig-page">หน้าเดิม ${pageItem.originalPageNum}</span>
+          </div>
+          <div class="merge-card-actions">
+            <button type="button" class="btn-merge-action btn-merge-rotate" title="หมุนหน้า 90°" aria-label="หมุนหน้า 90°">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+            <button type="button" class="btn-merge-action btn-merge-delete" title="ลบหน้านี้" aria-label="ลบหน้านี้">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="merge-card-thumb-frame">
+          <div class="merge-thumb-skeleton">กำลังโหลด...</div>
+        </div>
+
+        <div class="merge-card-footer">
+          <span class="merge-file-tag" title="${escapeHtml(pageItem.fileName)}">${escapeHtml(pageItem.fileName)}</span>
+          <span class="merge-file-page-tag">หน้า ${pageItem.originalPageNum}</span>
+        </div>
+      `;
+
+      // Rotate action
+      const btnRotate = card.querySelector('.btn-merge-rotate');
+      btnRotate.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pageItem.rotation = (pageItem.rotation + 90) % 360;
+        const img = card.querySelector('.merge-card-thumb-img');
+        if (img) img.style.transform = `rotate(${pageItem.rotation}deg)`;
       });
 
-      // Setup SortableJS for drag reorder
-      if (window.Sortable) {
-        if (mergeState.sortable) mergeState.sortable.destroy();
-        mergeState.sortable = new window.Sortable(fileListEl, {
-          animation: 150,
-          handle: '.pdf-file-handle',
-          ghostClass: 'sortable-ghost',
-          onEnd: function(evt) {
-            if (evt.oldIndex !== evt.newIndex) {
-              const [moved] = mergeState.files.splice(evt.oldIndex, 1);
-              mergeState.files.splice(evt.newIndex, 0, moved);
-              renderMergeUI();
-            }
+      // Delete action
+      const btnDelete = card.querySelector('.btn-merge-delete');
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const pIdx = mergeState.pages.findIndex(p => p.id === pageItem.id);
+        if (pIdx !== -1) {
+          mergeState.pages.splice(pIdx, 1);
+          // Check if file has any remaining pages
+          const remainingForFile = mergeState.pages.filter(p => p.fileId === pageItem.fileId);
+          if (remainingForFile.length === 0) {
+            const fIdx = mergeState.files.findIndex(f => f.id === pageItem.fileId);
+            if (fIdx !== -1) mergeState.files.splice(fIdx, 1);
           }
-        });
+          renderMergeUI();
+        }
+      });
+
+      fileListEl.appendChild(card);
+
+      // Render or display thumbnail
+      const thumbFrame = card.querySelector('.merge-card-thumb-frame');
+      if (pageItem.dataUrl) {
+        thumbFrame.innerHTML = `<img src="${pageItem.dataUrl}" alt="หน้า ${idx + 1}" class="merge-card-thumb-img" style="transform: rotate(${pageItem.rotation}deg);">`;
+      } else {
+        const buf = fileBufferMap.get(pageItem.fileId);
+        if (buf) {
+          renderPdfThumbnail(buf, pageItem.originalPageNum, 0.35).then(url => {
+            pageItem.dataUrl = url;
+            if (thumbFrame) {
+              thumbFrame.innerHTML = `<img src="${url}" alt="หน้า ${idx + 1}" class="merge-card-thumb-img" style="transform: rotate(${pageItem.rotation}deg);">`;
+            }
+          }).catch(() => {
+            if (thumbFrame) {
+              thumbFrame.innerHTML = `<span class="preview-err">หน้า ${pageItem.originalPageNum}</span>`;
+            }
+          });
+        }
       }
+    });
+
+    // Setup SortableJS for drag reorder
+    if (window.Sortable) {
+      if (mergeState.sortable) mergeState.sortable.destroy();
+      mergeState.sortable = new window.Sortable(fileListEl, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        filter: '.btn-merge-action, svg, path',
+        preventOnFilter: false,
+        onEnd: function(evt) {
+          if (evt.oldIndex !== evt.newIndex) {
+            const [moved] = mergeState.pages.splice(evt.oldIndex, 1);
+            mergeState.pages.splice(evt.newIndex, 0, moved);
+            mergeState.hasCustomPageDrag = true;
+            renderMergeUI();
+          }
+        }
+      });
     }
   }
 
   async function executeMerge() {
-    if (mergeState.files.length < 1) {
+    syncMergeState();
+
+    if (mergeState.pages.length < 1) {
       showToast('กรุณาเพิ่มไฟล์ PDF ก่อนทำการรวม', 'error');
       return;
     }
@@ -296,18 +414,33 @@
     showProgressModal();
     try {
       const mergedPdf = await window.PDFLib.PDFDocument.create();
-      const total = mergeState.files.length;
+      const totalPages = mergeState.pages.length;
 
-      for (let i = 0; i < total; i++) {
-        const item = mergeState.files[i];
-        updateProgress(i + 1, total, `กำลังรวม "${item.name}"... (${i + 1}/${total})`);
-        const srcDoc = await window.PDFLib.PDFDocument.load(item.buffer);
-        const copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
-        copiedPages.forEach(p => mergedPdf.addPage(p));
-        await new Promise(r => setTimeout(r, 0));
+      // Pre-load all source PDF documents
+      const loadedDocs = new Map();
+      for (const item of mergeState.files) {
+        if (!loadedDocs.has(item.id)) {
+          const doc = await window.PDFLib.PDFDocument.load(item.buffer);
+          loadedDocs.set(item.id, doc);
+        }
       }
 
-      updateProgress(total, total, 'กำลังจัดทำไฟล์ PDF รวม...');
+      for (let i = 0; i < totalPages; i++) {
+        const pageItem = mergeState.pages[i];
+        updateProgress(i + 1, totalPages, `กำลังรวมหน้า ${i + 1} จาก ${totalPages}...`);
+        const srcDoc = loadedDocs.get(pageItem.fileId);
+        if (srcDoc) {
+          const [copiedPage] = await mergedPdf.copyPages(srcDoc, [pageItem.originalPageNum - 1]);
+          if (pageItem.rotation) {
+            const curRot = copiedPage.getRotation().angle;
+            copiedPage.setRotation(window.PDFLib.degrees((curRot + pageItem.rotation) % 360));
+          }
+          mergedPdf.addPage(copiedPage);
+        }
+        if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+      }
+
+      updateProgress(totalPages, totalPages, 'กำลังจัดทำไฟล์ PDF รวม...');
       const mergedBytes = await mergedPdf.save();
       downloadBlob(new Blob([mergedBytes], { type: 'application/pdf' }), filename);
       hideProgressModal();
