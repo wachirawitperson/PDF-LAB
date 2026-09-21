@@ -1288,15 +1288,21 @@
           </div>
         </div>
 
-        <!-- Workspace Screen -->
-        <div class="workspace-screen hidden" id="compressPdfWorkspaceScreen">
-          <div class="workspace-left">
-            <div class="workspace-toolbar">
-              <div class="toolbar-left">
+        <!-- Workspace Screen: 2-Pane Document Workbench -->
+        <div class="workspace-screen workbench-screen hidden" id="compressPdfWorkspaceScreen">
+          <!-- LEFT: Document Workspace -->
+          <div class="workbench-left" id="compressPdfWorkspaceLeft">
+            <!-- Workbench Compact Top Bar -->
+            <div class="workbench-top-bar">
+              <div class="workbench-file-meta">
+                <span class="workbench-file-name" id="compressPdfActiveFileName" title="ชื่อไฟล์">กำลังโหลด...</span>
+                <span class="workbench-pill" id="compressPdfActivePageCount">0 หน้า</span>
+                <span class="workbench-pill" id="compressPdfActiveFileSize">0 MB</span>
                 <span class="file-count-badge" id="compressPdfFileBadge">0 ไฟล์</span>
                 <span class="badge-status" id="compressPdfStatusBadge">พร้อมบีบอัด</span>
               </div>
-              <div class="toolbar-right">
+              <div class="workbench-top-actions">
+                <div class="workbench-file-tabs hidden" id="compressPdfFileTabs"></div>
                 <button type="button" class="btn btn-secondary btn-sm" id="btnAddMoreCompressPdf" title="เพิ่มไฟล์ PDF อีก">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   <span>เพิ่มไฟล์</span>
@@ -1307,45 +1313,93 @@
               </div>
             </div>
 
-            <!-- File List Container -->
-            <div class="pdf-file-list" id="compressPdfFileList">
-              <!-- Rendered dynamically -->
+            <!-- Legacy File List Hook (Hidden / for programmatic compatibility) -->
+            <div class="pdf-file-list hidden" id="compressPdfFileList"></div>
+
+            <!-- Mobile Comparison Toggle (Shown on mobile viewports) -->
+            <div class="workbench-mobile-toggle hidden" id="compressPdfMobileToggle">
+              <button type="button" class="btn-toggle-view active" id="btnToggleViewOriginal" data-view="original">ต้นฉบับ</button>
+              <button type="button" class="btn-toggle-view" id="btnToggleViewCompressed" data-view="compressed">หลังบีบอัด</button>
             </div>
 
-            <!-- Post-Compression Results Summary Card -->
-            <div class="compress-summary-card hidden" id="compressPdfSummaryCard">
-              <div class="compress-summary-header">
-                <div class="compress-summary-title-wrap">
-                  <span class="compress-check-icon">✓</span>
-                  <div>
-                    <h4 class="compress-summary-title">บีบอัดไฟล์ PDF สำเร็จเรียบร้อย</h4>
-                    <p class="compress-summary-subtext" id="compressPdfSummarySubtext">ลดขนาดได้ 0 B (0%)</p>
+            <!-- Central Document Stage -->
+            <div class="workbench-stage" id="compressPdfStage" tabindex="0" aria-label="พื้นที่แสดงเอกสาร PDF (ใช้ปุ่มลูกศรซ้ายขวาเพื่อเปลี่ยนหน้าได้)">
+              <div class="workbench-comparison-container" id="compressPdfComparisonContainer">
+                <!-- Original Viewer -->
+                <div class="workbench-viewer-pane" id="compressPdfViewerOriginal">
+                  <div class="viewer-pane-header">
+                    <span class="viewer-pane-badge badge-orig">ต้นฉบับ</span>
+                    <span class="viewer-pane-meta" id="compressPdfOriginalMeta">-</span>
+                  </div>
+                  <div class="workbench-canvas-frame" id="compressPdfCanvasFrameOriginal">
+                    <canvas id="compressPdfCanvasOriginal" class="workbench-canvas"></canvas>
                   </div>
                 </div>
-                <div class="compress-summary-actions">
-                  <button type="button" class="btn btn-primary btn-sm" id="btnDownloadAllCompressPdf">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    <span id="btnDownloadAllCompressPdfText">ดาวน์โหลดทั้งหมด (.zip)</span>
-                  </button>
+
+                <!-- Compressed / Comparison Viewer -->
+                <div class="workbench-viewer-pane" id="compressPdfViewerCompressed">
+                  <div class="viewer-pane-header">
+                    <span class="viewer-pane-badge badge-comp">หลังบีบอัด</span>
+                    <span class="viewer-pane-meta" id="compressPdfCompressedMeta">-</span>
+                  </div>
+                  <div class="workbench-canvas-frame" id="compressPdfCanvasFrameCompressed">
+                    <canvas id="compressPdfCanvasCompressed" class="workbench-canvas"></canvas>
+                    <div class="comparison-empty-placeholder" id="compressPdfEmptyPlaceholder">
+                      <div class="placeholder-icon">🗜️</div>
+                      <p class="placeholder-title">ตัวอย่างหลังบีบอัด</p>
+                      <p class="placeholder-desc">จะแสดงเปรียบเทียบหน้าจริงคู่กับต้นฉบับหลังประมวลผลเสร็จสิ้น</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- Privacy Guarantee Callout -->
-            <div class="privacy-callout-card">
-              <div class="privacy-callout-header">🔒 ปลอดภัยและเป็นส่วนตัว 100%</div>
-              <p>เอกสารของคุณถูกประมวลผลและบีบอัดภายในหน่วยความจำของเว็บเบราว์เซอร์บนอุปกรณ์เครื่องนี้เท่านั้น ไม่มีการส่งข้อมูลใด ๆ ออกสู่อินเทอร์เน็ต</p>
+            <!-- Workbench Floating Toolbar (Zoom & Navigation) -->
+            <div class="workbench-toolbar">
+              <div class="toolbar-cluster">
+                <button type="button" class="btn-tool-ctrl" id="btnCompressPdfPrevPage" title="หน้าก่อนหน้า (Arrow Left)" aria-label="หน้าก่อนหน้า">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <span class="toolbar-page-indicator" id="compressPdfPageIndicator">หน้า 1 / 1</span>
+                <button type="button" class="btn-tool-ctrl" id="btnCompressPdfNextPage" title="หน้าถัดไป (Arrow Right)" aria-label="หน้าถัดไป">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+
+              <div class="toolbar-divider"></div>
+
+              <div class="toolbar-cluster">
+                <button type="button" class="btn-tool-ctrl" id="btnCompressPdfZoomOut" title="ย่อขนาด (-)" aria-label="ย่อขนาด">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <span class="toolbar-zoom-label" id="compressPdfZoomLabel">100%</span>
+                <button type="button" class="btn-tool-ctrl" id="btnCompressPdfZoomIn" title="ขยายขนาด (+)" aria-label="ขยายขนาด">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button type="button" class="btn-tool-ctrl btn-tool-fit" id="btnCompressPdfZoomFit" title="พอดีหน้าจอ" aria-label="พอดีหน้าจอ">
+                  <span>Fit</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Horizontal Thumbnail Strip -->
+            <div class="workbench-thumb-strip-wrap">
+              <div class="workbench-thumb-strip" id="compressPdfThumbStrip" role="tablist" aria-label="รายการหน้ากระดาษของเอกสาร">
+                <!-- Thumbnails rendered dynamically -->
+              </div>
             </div>
           </div>
 
-          <!-- Settings Sidebar -->
-          <aside class="workspace-right">
-            <div class="settings-card">
-              <h3 class="settings-title">ระดับการบีบอัด (Compression Level)</h3>
+          <!-- RIGHT: Control Panel (~380px) -->
+          <aside class="workbench-right">
+            <div class="workbench-panel-content">
+              <div class="workbench-panel-header">
+                <h3 class="settings-title">ระดับการบีบอัด</h3>
+                <span class="settings-subtitle">ปรับคุณภาพและความละเอียดให้เหมาะสม</span>
+              </div>
 
               <!-- Compression Level Options -->
               <div class="setting-group">
-                <label class="setting-label">เลือกระดับที่ต้องการ:</label>
                 <div class="compression-level-selector" role="radiogroup" aria-label="ระดับการบีบอัดไฟล์">
                   <label class="level-card" for="compLvlHigh">
                     <input type="radio" name="compressPdfLevel" id="compLvlHigh" value="high">
@@ -1363,7 +1417,7 @@
                     <div class="level-card-body">
                       <div class="level-card-header">
                         <span class="level-dot dot-balanced"></span>
-                        <span class="level-name">สมดุล (Balanced) — แนะนำ</span>
+                        <span class="level-name">สมดุล (Balanced)</span>
                         <span class="badge-recommended">แนะนำ</span>
                       </div>
                       <p class="level-desc">ลดขนาดและคุณภาพอย่างสมดุล เหมาะสำหรับเอกสารทั่วไป (120 DPI / 72% คุณภาพ)</p>
@@ -1377,7 +1431,7 @@
                         <span class="level-dot dot-small"></span>
                         <span class="level-name">ขนาดเล็ก (Small Size)</span>
                       </div>
-                      <p class="level-desc">ลดขนาดไฟล์มากที่สุด เหมาะสำหรับส่งผ่านช่องทางที่จำกัดขนาดไฟล์ (90 DPI / 55% คุณภาพ)</p>
+                      <p class="level-desc">ลดขนาดไฟล์มากที่สุด เหมาะสำหรับส่งต่อทางไลน์/เมล (90 DPI / 55% คุณภาพ)</p>
                     </div>
                   </label>
                 </div>
@@ -1393,20 +1447,52 @@
                 ℹ️ <strong>การประมวลผล:</strong> ระบบใช้การบีบอัดภาพเอกสารภายในเครื่อง (Local Image Recompression) เพื่อลดขนาดไฟล์ หน้าเอกสารจะถูกแปลงเป็นภาพความละเอียดตามระดับที่เลือก ข้อความเดิมอาจไม่สามารถไฮไลต์หรือค้นหาได้
               </div>
 
-              <!-- Action Button -->
-              <div class="action-box">
-                <button type="button" class="btn btn-primary btn-cta" id="btnExecuteCompressPdf">
-                  <span class="btn-cta-content">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                      <polyline points="16 12 12 16 8 12"/>
-                      <line x1="12" y1="16" x2="12" y2="8"/>
-                    </svg>
-                    <span class="cta-text-main">🗜️ เริ่มบีบอัด PDF</span>
-                  </span>
-                  <span class="cta-text-sub" id="compressPdfCtaSubtext">0 ไฟล์</span>
-                </button>
+              <!-- Compact Privacy Guarantee Note -->
+              <div class="workbench-privacy-note">
+                <span>🔒 เอกสารประมวลผลในเครื่องของคุณ 100% ไม่ส่งข้อมูลออกนอกอุปกรณ์</span>
+              </div>
+            </div>
+
+            <!-- Sticky Action Container (Pre & Post Compression) -->
+            <div class="workbench-sticky-action" id="compressPdfActionBox">
+              <!-- Post-Compression Results Summary Card (Shown in Right Panel when done) -->
+              <div class="compress-summary-card workbench-result-card hidden" id="compressPdfSummaryCard">
+                <div class="compress-summary-header">
+                  <div class="compress-summary-title-wrap">
+                    <span class="compress-check-icon">✓</span>
+                    <div>
+                      <h4 class="compress-summary-title">บีบอัดเอกสารเสร็จเรียบร้อย</h4>
+                      <p class="compress-summary-subtext" id="compressPdfSummarySubtext">ลดขนาดได้ 0 B (0%)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="workbench-result-badges" id="compressPdfResultBadges">
+                  <!-- Dynamic badges inserted here -->
+                </div>
+
+                <div class="workbench-result-downloads">
+                  <button type="button" class="btn btn-primary btn-cta btn-dl-active-pdf" id="btnDownloadActiveCompressPdf">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span>ดาวน์โหลด PDF</span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm hidden" id="btnDownloadAllCompressPdf">
+                    <span id="btnDownloadAllCompressPdfText">ดาวน์โหลดทั้งหมด (.zip)</span>
+                  </button>
+                </div>
               </div>
 
+              <!-- Pre-Compression Primary Action CTA Button -->
+              <button type="button" class="btn btn-primary btn-cta" id="btnExecuteCompressPdf">
+                <span class="btn-cta-content">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <polyline points="16 12 12 16 8 12"/>
+                    <line x1="12" y1="16" x2="12" y2="8"/>
+                  </svg>
+                  <span class="cta-text-main">🗜️ เริ่มบีบอัด PDF</span>
+                </span>
+                <span class="cta-text-sub" id="compressPdfCtaSubtext">0 ไฟล์</span>
+              </button>
             </div>
           </aside>
         </div>

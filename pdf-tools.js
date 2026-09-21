@@ -2313,12 +2313,20 @@
   }
 
   // ==========================================================================
-  // TOOL 8: บีบอัด PDF (Compress PDF)
+  // TOOL 8: บีบอัด PDF (Compress PDF) — 2-PANE WORKSPACE DESIGN SYSTEM
   // ==========================================================================
   const compressPdfState = {
     files: [], // Array of { id, file, name, size, pageCount, buffer, thumbUrl, compressedBlob, compressedSize, isCompressed, hasText }
     level: 'balanced', // 'high' | 'balanced' | 'small'
-    isProcessing: false
+    isProcessing: false,
+    activeFileIndex: 0,
+    activePage: 1,
+    zoomScale: 1.0,
+    fitMode: true,
+    mobileView: 'original', // 'original' | 'compressed'
+    originalDoc: null,
+    compressedDoc: null,
+    renderedThumbs: new Map() // pageNum -> dataUrl
   };
 
   // Compression presets for Local Image Recompression:
@@ -2331,6 +2339,34 @@
     small: { scale: 90 / 72, quality: 0.55, label: 'ขนาดเล็ก (90 DPI / 55%)' }
   };
 
+  // PDF.js Memory Lifecycle Manager: Safe destruction of previous documents & URLs
+  async function cleanupWorkbenchPdfJsDocs() {
+    if (compressPdfState.originalDoc) {
+      try {
+        await compressPdfState.originalDoc.destroy();
+      } catch (_) {}
+      compressPdfState.originalDoc = null;
+    }
+    if (compressPdfState.compressedDoc) {
+      try {
+        await compressPdfState.compressedDoc.destroy();
+      } catch (_) {}
+      compressPdfState.compressedDoc = null;
+    }
+    compressPdfState.renderedThumbs.clear();
+
+    const canvasOrig = document.getElementById('compressPdfCanvasOriginal');
+    if (canvasOrig) {
+      canvasOrig.width = 0;
+      canvasOrig.height = 0;
+    }
+    const canvasComp = document.getElementById('compressPdfCanvasCompressed');
+    if (canvasComp) {
+      canvasComp.width = 0;
+      canvasComp.height = 0;
+    }
+  }
+
   function initCompressPdfTool() {
     const fileInput = document.getElementById('fileInputCompressPdf');
     const btnSelect = document.getElementById('btnSelectCompressPdf');
@@ -2339,6 +2375,18 @@
     const btnClear = document.getElementById('btnClearCompressPdf');
     const btnExecute = document.getElementById('btnExecuteCompressPdf');
     const btnDownloadAll = document.getElementById('btnDownloadAllCompressPdf');
+    const btnDownloadActive = document.getElementById('btnDownloadActiveCompressPdf');
+
+    // Page navigation & Zoom buttons
+    const btnPrevPage = document.getElementById('btnCompressPdfPrevPage');
+    const btnNextPage = document.getElementById('btnCompressPdfNextPage');
+    const btnZoomOut = document.getElementById('btnCompressPdfZoomOut');
+    const btnZoomIn = document.getElementById('btnCompressPdfZoomIn');
+    const btnZoomFit = document.getElementById('btnCompressPdfZoomFit');
+
+    // Mobile View Toggle buttons
+    const btnToggleOrig = document.getElementById('btnToggleViewOriginal');
+    const btnToggleComp = document.getElementById('btnToggleViewCompressed');
 
     btnSelect?.addEventListener('click', () => fileInput?.click());
     btnAddMore?.addEventListener('click', () => fileInput?.click());
@@ -2364,11 +2412,16 @@
       }
     });
 
-    btnClear?.addEventListener('click', () => {
+    btnClear?.addEventListener('click', async () => {
+      await cleanupWorkbenchPdfJsDocs();
       compressPdfState.files.forEach(f => {
         if (f.thumbUrl && f.thumbUrl.startsWith('blob:')) URL.revokeObjectURL(f.thumbUrl);
       });
       compressPdfState.files = [];
+      compressPdfState.activeFileIndex = 0;
+      compressPdfState.activePage = 1;
+      compressPdfState.zoomScale = 1.0;
+      compressPdfState.fitMode = true;
       renderCompressPdfUI();
       showToast('ล้างรายการไฟล์ทั้งหมดแล้ว', 'info');
     });
@@ -2377,13 +2430,11 @@
     document.querySelectorAll('input[name="compressPdfLevel"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         compressPdfState.level = e.target.value;
-        // Update selection UI classes
         document.querySelectorAll('.compression-level-selector .level-card').forEach(card => {
           const input = card.querySelector('input[type="radio"]');
           card.classList.toggle('selected', input && input.checked);
         });
 
-        // Show/hide small size warning banner
         const smallWarning = document.getElementById('compressPdfSmallWarning');
         if (smallWarning) {
           smallWarning.classList.toggle('hidden', compressPdfState.level !== 'small');
@@ -2393,6 +2444,108 @@
 
     btnExecute?.addEventListener('click', executeCompressPdf);
     btnDownloadAll?.addEventListener('click', downloadAllCompressPdf);
+
+    // Download active file compressed PDF
+    btnDownloadActive?.addEventListener('click', () => {
+      const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+      if (activeItem && activeItem.compressedBlob) {
+        const outName = activeItem.name.replace(/\.pdf$/i, '') + '-compressed.pdf';
+        downloadBlob(activeItem.compressedBlob, outName);
+        showToast(`ดาวน์โหลด "${outName}" เรียบร้อย`, 'success');
+      }
+    });
+
+    // Navigation & Zoom Event Listeners
+    btnPrevPage?.addEventListener('click', () => {
+      if (compressPdfState.activePage > 1) {
+        compressPdfState.activePage--;
+        renderActivePagePreview();
+      }
+    });
+
+    btnNextPage?.addEventListener('click', () => {
+      const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+      const maxPages = activeItem ? activeItem.pageCount : 1;
+      if (compressPdfState.activePage < maxPages) {
+        compressPdfState.activePage++;
+        renderActivePagePreview();
+      }
+    });
+
+    btnZoomOut?.addEventListener('click', () => {
+      compressPdfState.fitMode = false;
+      compressPdfState.zoomScale = Math.max(0.3, compressPdfState.zoomScale - 0.15);
+      renderActivePagePreview();
+    });
+
+    btnZoomIn?.addEventListener('click', () => {
+      compressPdfState.fitMode = false;
+      compressPdfState.zoomScale = Math.min(3.0, compressPdfState.zoomScale + 0.15);
+      renderActivePagePreview();
+    });
+
+    btnZoomFit?.addEventListener('click', () => {
+      compressPdfState.fitMode = true;
+      renderActivePagePreview();
+    });
+
+    // Mobile View Toggle Listeners
+    btnToggleOrig?.addEventListener('click', () => {
+      compressPdfState.mobileView = 'original';
+      btnToggleOrig.classList.add('active');
+      btnToggleComp?.classList.remove('active');
+      updateMobilePanesVisibility();
+    });
+
+    btnToggleComp?.addEventListener('click', () => {
+      compressPdfState.mobileView = 'compressed';
+      btnToggleComp.classList.add('active');
+      btnToggleOrig?.classList.remove('active');
+      updateMobilePanesVisibility();
+    });
+
+    // Keyboard Arrow navigation for Workbench Stage
+    const stage = document.getElementById('compressPdfStage');
+    stage?.addEventListener('keydown', (e) => {
+      const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+      if (!activeItem) return;
+      if (e.key === 'ArrowLeft' && compressPdfState.activePage > 1) {
+        e.preventDefault();
+        compressPdfState.activePage--;
+        renderActivePagePreview();
+      } else if (e.key === 'ArrowRight' && compressPdfState.activePage < activeItem.pageCount) {
+        e.preventDefault();
+        compressPdfState.activePage++;
+        renderActivePagePreview();
+      }
+    });
+
+    // Window resize observer to update Fit zoom mode dynamically
+    window.addEventListener('resize', () => {
+      if (compressPdfState.files.length > 0 && compressPdfState.fitMode) {
+        renderActivePagePreview();
+      }
+    });
+  }
+
+  function updateMobilePanesVisibility() {
+    const origPane = document.getElementById('compressPdfViewerOriginal');
+    const compPane = document.getElementById('compressPdfViewerCompressed');
+    if (!origPane || !compPane) return;
+
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      if (compressPdfState.mobileView === 'original') {
+        origPane.classList.remove('mobile-hidden');
+        compPane.classList.add('mobile-hidden');
+      } else {
+        origPane.classList.add('mobile-hidden');
+        compPane.classList.remove('mobile-hidden');
+      }
+    } else {
+      origPane.classList.remove('mobile-hidden');
+      compPane.classList.remove('mobile-hidden');
+    }
   }
 
   async function handleCompressPdfFiles(files) {
@@ -2437,8 +2590,213 @@
 
     hideProgressModal();
     if (loaded > 0) {
+      await switchActiveFile(compressPdfState.files.length - loaded);
       renderCompressPdfUI();
       showToast(`เพิ่มไฟล์ PDF สำเร็จ ${loaded} ไฟล์`, 'success');
+    }
+  }
+
+  async function switchActiveFile(index) {
+    if (index < 0 || index >= compressPdfState.files.length) return;
+    compressPdfState.activeFileIndex = index;
+    compressPdfState.activePage = 1;
+    await cleanupWorkbenchPdfJsDocs();
+
+    const activeItem = compressPdfState.files[index];
+    if (activeItem && activeItem.buffer) {
+      try {
+        const origTask = window.pdfjsLib.getDocument({ data: new Uint8Array(activeItem.buffer.slice(0)) });
+        compressPdfState.originalDoc = await origTask.promise;
+      } catch (err) {
+        console.warn('Failed to load originalDoc in PDF.js:', err);
+      }
+
+      if (activeItem.isCompressed && activeItem.compressedBlob) {
+        try {
+          const compAb = await activeItem.compressedBlob.arrayBuffer();
+          const compTask = window.pdfjsLib.getDocument({ data: new Uint8Array(compAb) });
+          compressPdfState.compressedDoc = await compTask.promise;
+        } catch (err) {
+          console.warn('Failed to load compressedDoc in PDF.js:', err);
+        }
+      }
+    }
+    await renderActivePagePreview();
+  }
+
+  async function renderActivePagePreview() {
+    const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+    if (!activeItem) return;
+
+    const pageIndicator = document.getElementById('compressPdfPageIndicator');
+    const zoomLabel = document.getElementById('compressPdfZoomLabel');
+    const btnPrevPage = document.getElementById('btnCompressPdfPrevPage');
+    const btnNextPage = document.getElementById('btnCompressPdfNextPage');
+    const btnZoomFit = document.getElementById('btnCompressPdfZoomFit');
+
+    const curPage = compressPdfState.activePage;
+    const totalPages = activeItem.pageCount || 1;
+
+    if (pageIndicator) pageIndicator.textContent = `หน้า ${curPage} / ${totalPages}`;
+    if (btnPrevPage) btnPrevPage.disabled = curPage <= 1;
+    if (btnNextPage) btnNextPage.disabled = curPage >= totalPages;
+
+    const canvasOrig = document.getElementById('compressPdfCanvasOriginal');
+    const canvasComp = document.getElementById('compressPdfCanvasCompressed');
+    const placeholder = document.getElementById('compressPdfEmptyPlaceholder');
+    const origMeta = document.getElementById('compressPdfOriginalMeta');
+    const compMeta = document.getElementById('compressPdfCompressedMeta');
+    const stage = document.getElementById('compressPdfStage');
+
+    if (origMeta) origMeta.textContent = `${formatFileSize(activeItem.size)}`;
+
+    if (!compressPdfState.originalDoc && activeItem.buffer) {
+      try {
+        const origTask = window.pdfjsLib.getDocument({ data: new Uint8Array(activeItem.buffer.slice(0)) });
+        compressPdfState.originalDoc = await origTask.promise;
+      } catch (_) {}
+    }
+
+    if (!compressPdfState.originalDoc) return;
+
+    try {
+      const pageOrig = await compressPdfState.originalDoc.getPage(curPage);
+      const vp1 = pageOrig.getViewport({ scale: 1.0 });
+
+      // Calculate Scale dynamically based on available Stage container dimensions
+      let renderScale = compressPdfState.zoomScale;
+      if (compressPdfState.fitMode && stage) {
+        const isDualPane = activeItem.isCompressed && compressPdfState.compressedDoc && window.innerWidth > 768;
+        const availableW = Math.max(200, (stage.clientWidth - (isDualPane ? 80 : 50)) / (isDualPane ? 2 : 1));
+        const availableH = Math.max(200, stage.clientHeight - 130);
+        const scaleW = availableW / vp1.width;
+        const scaleH = availableH / vp1.height;
+        renderScale = Math.min(scaleW, scaleH, 1.8);
+        renderScale = Math.max(0.3, renderScale);
+        compressPdfState.zoomScale = renderScale;
+      }
+
+      if (btnZoomFit) btnZoomFit.classList.toggle('active', compressPdfState.fitMode);
+      if (zoomLabel) zoomLabel.textContent = `${Math.round(renderScale * 100)}%`;
+
+      // Render Original Canvas
+      if (canvasOrig) {
+        const vpOrig = pageOrig.getViewport({ scale: renderScale });
+        canvasOrig.width = Math.round(vpOrig.width);
+        canvasOrig.height = Math.round(vpOrig.height);
+        const ctxOrig = canvasOrig.getContext('2d');
+        await pageOrig.render({ canvasContext: ctxOrig, viewport: vpOrig }).promise;
+      }
+
+      // Render Compressed Canvas (if available from actual output Blob)
+      if (activeItem.isCompressed && activeItem.compressedBlob) {
+        if (!compressPdfState.compressedDoc) {
+          const compAb = await activeItem.compressedBlob.arrayBuffer();
+          const compTask = window.pdfjsLib.getDocument({ data: new Uint8Array(compAb) });
+          compressPdfState.compressedDoc = await compTask.promise;
+        }
+
+        if (compressPdfState.compressedDoc && canvasComp) {
+          const pageComp = await compressPdfState.compressedDoc.getPage(curPage);
+          const vpComp = pageComp.getViewport({ scale: renderScale });
+          canvasComp.width = Math.round(vpComp.width);
+          canvasComp.height = Math.round(vpComp.height);
+          const ctxComp = canvasComp.getContext('2d');
+          await pageComp.render({ canvasContext: ctxComp, viewport: vpComp }).promise;
+          canvasComp.classList.remove('hidden');
+          if (placeholder) placeholder.classList.add('hidden');
+        }
+
+        if (compMeta) {
+          const compSize = activeItem.compressedSize;
+          const origSize = activeItem.size;
+          const pct = Math.round(((origSize - compSize) / origSize) * 100);
+          compMeta.textContent = compSize < origSize 
+            ? `${formatFileSize(compSize)} (↓${pct}%)` 
+            : `${formatFileSize(compSize)}`;
+        }
+      } else {
+        if (canvasComp) canvasComp.classList.add('hidden');
+        if (placeholder) placeholder.classList.remove('hidden');
+        if (compMeta) compMeta.textContent = '-';
+      }
+
+      updateMobilePanesVisibility();
+      updateThumbnailSelection();
+    } catch (err) {
+      console.warn('renderActivePagePreview error:', err);
+    }
+  }
+
+  function updateThumbnailSelection() {
+    const thumbStrip = document.getElementById('compressPdfThumbStrip');
+    if (!thumbStrip) return;
+    const curPage = compressPdfState.activePage;
+    thumbStrip.querySelectorAll('.workbench-thumb-item').forEach(item => {
+      const p = parseInt(item.dataset.page, 10);
+      item.classList.toggle('active', p === curPage);
+      if (p === curPage) {
+        item.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    });
+  }
+
+  async function renderThumbnailStrip() {
+    const thumbStrip = document.getElementById('compressPdfThumbStrip');
+    if (!thumbStrip) return;
+    thumbStrip.innerHTML = '';
+
+    const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+    if (!activeItem || !compressPdfState.originalDoc) return;
+
+    const pageCount = activeItem.pageCount || 1;
+
+    for (let pNum = 1; pNum <= pageCount; pNum++) {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'workbench-thumb-item' + (pNum === compressPdfState.activePage ? ' active' : '');
+      itemEl.dataset.page = pNum;
+      itemEl.setAttribute('role', 'tab');
+      itemEl.setAttribute('aria-label', `หน้า ${pNum}`);
+
+      const canvas = document.createElement('canvas');
+      canvas.className = 'workbench-thumb-canvas';
+      itemEl.appendChild(canvas);
+
+      const numBadge = document.createElement('span');
+      numBadge.className = 'workbench-thumb-number';
+      numBadge.textContent = pNum;
+      itemEl.appendChild(numBadge);
+
+      itemEl.addEventListener('click', () => {
+        compressPdfState.activePage = pNum;
+        renderActivePagePreview();
+      });
+
+      thumbStrip.appendChild(itemEl);
+
+      // Render thumbnail asynchronously
+      (async (p, cvs) => {
+        try {
+          if (compressPdfState.renderedThumbs.has(p)) {
+            const img = new Image();
+            img.onload = () => {
+              cvs.width = img.naturalWidth;
+              cvs.height = img.naturalHeight;
+              cvs.getContext('2d').drawImage(img, 0, 0);
+            };
+            img.src = compressPdfState.renderedThumbs.get(p);
+            return;
+          }
+
+          const page = await compressPdfState.originalDoc.getPage(p);
+          const vp = page.getViewport({ scale: 0.25 });
+          cvs.width = Math.round(vp.width);
+          cvs.height = Math.round(vp.height);
+          const ctx = cvs.getContext('2d');
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          compressPdfState.renderedThumbs.set(p, cvs.toDataURL('image/jpeg', 0.8));
+        } catch (_) {}
+      })(pNum, canvas);
     }
   }
 
@@ -2451,6 +2809,13 @@
     const ctaSubtext = document.getElementById('compressPdfCtaSubtext');
     const summaryCard = document.getElementById('compressPdfSummaryCard');
     const summarySubtext = document.getElementById('compressPdfSummarySubtext');
+    const resultBadges = document.getElementById('compressPdfResultBadges');
+    const executeBtn = document.getElementById('btnExecuteCompressPdf');
+    const activeFileNameEl = document.getElementById('compressPdfActiveFileName');
+    const activePageCountEl = document.getElementById('compressPdfActivePageCount');
+    const activeFileSizeEl = document.getElementById('compressPdfActiveFileSize');
+    const fileTabsEl = document.getElementById('compressPdfFileTabs');
+    const btnDownloadAll = document.getElementById('btnDownloadAllCompressPdf');
 
     if (!uploadScreen || !workspaceScreen) return;
 
@@ -2459,6 +2824,7 @@
       workspaceScreen.classList.add('hidden');
       if (fileListEl) fileListEl.innerHTML = '';
       if (summaryCard) summaryCard.classList.add('hidden');
+      if (executeBtn) executeBtn.classList.remove('hidden');
       return;
     }
 
@@ -2482,14 +2848,53 @@
       }
     }
 
-    // Summary Card
+    // Active File Meta in Top Bar
+    const activeIndex = Math.min(compressPdfState.activeFileIndex, totalFiles - 1);
+    compressPdfState.activeFileIndex = Math.max(0, activeIndex);
+    const activeItem = compressPdfState.files[compressPdfState.activeFileIndex];
+
+    if (activeItem) {
+      if (activeFileNameEl) {
+        activeFileNameEl.textContent = activeItem.name;
+        activeFileNameEl.title = activeItem.name;
+      }
+      if (activePageCountEl) activePageCountEl.textContent = `${activeItem.pageCount} หน้า`;
+      if (activeFileSizeEl) activeFileSizeEl.textContent = `${formatFileSize(activeItem.size)}`;
+    }
+
+    // Multi-file tabs
+    if (fileTabsEl) {
+      if (totalFiles > 1) {
+        fileTabsEl.classList.remove('hidden');
+        fileTabsEl.innerHTML = '';
+        compressPdfState.files.forEach((f, idx) => {
+          const tab = document.createElement('button');
+          tab.type = 'button';
+          tab.className = 'workbench-file-tab' + (idx === compressPdfState.activeFileIndex ? ' active' : '');
+          tab.textContent = `${idx + 1}. ${f.name.length > 12 ? f.name.substr(0, 10) + '…' : f.name}`;
+          tab.title = f.name;
+          tab.addEventListener('click', async () => {
+            await switchActiveFile(idx);
+            renderCompressPdfUI();
+          });
+          fileTabsEl.appendChild(tab);
+        });
+      } else {
+        fileTabsEl.classList.add('hidden');
+      }
+    }
+
+    // Summary Card & Result Badges
     if (summaryCard) {
       if (compressedFiles.length > 0) {
         summaryCard.classList.remove('hidden');
+        if (executeBtn) executeBtn.classList.add('hidden');
+
         const origTotal = compressedFiles.reduce((acc, f) => acc + f.size, 0);
         const compTotal = compressedFiles.reduce((acc, f) => acc + (f.compressedSize || f.size), 0);
         const reducedFiles = compressedFiles.filter(f => f.compressedSize < f.size);
         const savedBytes = reducedFiles.reduce((acc, f) => acc + (f.size - f.compressedSize), 0);
+
         if (summarySubtext) {
           if (savedBytes > 0) {
             const percentSaved = Math.round((savedBytes / origTotal) * 100);
@@ -2498,12 +2903,41 @@
             summarySubtext.textContent = 'ไฟล์ที่เลือกไม่สามารถลดขนาดได้เพิ่มเติมด้วยการตั้งค่านี้ (ขนาดไฟล์หลังประมวลผลใกล้เคียงหรือใหญ่กว่าเดิม)';
           }
         }
+
+        // Populate Result Badges
+        if (resultBadges && activeItem && activeItem.isCompressed) {
+          const origSize = activeItem.size;
+          const compSize = activeItem.compressedSize;
+          let badgeHtml = '';
+          if (compSize < origSize) {
+            const pct = Math.round(((origSize - compSize) / origSize) * 100);
+            badgeHtml += `<span class="compress-result-badge badge-reduced">↓ ${pct}% (${formatFileSize(compSize)})</span>`;
+          } else {
+            badgeHtml += `<span class="compress-result-badge badge-neutral">ไฟล์นี้ไม่สามารถลดขนาดได้เพิ่มเติมด้วยการตั้งค่านี้ (${formatFileSize(compSize)})</span>`;
+          }
+
+          if (activeItem.hasText) {
+            badgeHtml += `<span class="badge-text-status badge-text-searchable" title="เอกสารมีข้อความที่สามารถเลือกหรือค้นหาได้">📄 ข้อความยังเลือก/ค้นหาได้</span>`;
+          } else {
+            badgeHtml += `<span class="badge-text-status badge-text-rasterized" title="เอกสารถูกแปลงเป็นภาพ ข้อความจึงไม่สามารถเลือกหรือค้นหาได้">🖼️ เอกสารภาพ — ไม่สามารถเลือก/ค้นหาข้อความได้</span>`;
+          }
+          resultBadges.innerHTML = badgeHtml;
+        }
+
+        if (btnDownloadAll) {
+          btnDownloadAll.classList.toggle('hidden', compressedFiles.length <= 1);
+        }
       } else {
         summaryCard.classList.add('hidden');
+        if (executeBtn) executeBtn.classList.remove('hidden');
       }
     }
 
-    // File List
+    // Render Thumbnail Strip & Active Page Preview
+    renderThumbnailStrip();
+    renderActivePagePreview();
+
+    // Legacy File List Hook for Programmatic/Test Compatibility
     if (fileListEl) {
       fileListEl.innerHTML = '';
       compressPdfState.files.forEach((item, idx) => {
@@ -2566,7 +3000,6 @@
           </div>
         `;
 
-        // Download single
         const dlBtn = row.querySelector('.btn-dl-single');
         dlBtn?.addEventListener('click', () => {
           if (item.compressedBlob) {
@@ -2576,11 +3009,14 @@
           }
         });
 
-        // Remove item
         const removeBtn = row.querySelector('.btn-remove-item');
-        removeBtn?.addEventListener('click', () => {
+        removeBtn?.addEventListener('click', async () => {
           if (item.thumbUrl && item.thumbUrl.startsWith('blob:')) URL.revokeObjectURL(item.thumbUrl);
           compressPdfState.files.splice(idx, 1);
+          if (compressPdfState.activeFileIndex >= compressPdfState.files.length) {
+            compressPdfState.activeFileIndex = Math.max(0, compressPdfState.files.length - 1);
+          }
+          await switchActiveFile(compressPdfState.activeFileIndex);
           renderCompressPdfUI();
         });
 
@@ -2597,6 +3033,14 @@
 
     if (compressPdfState.isProcessing) return;
     compressPdfState.isProcessing = true;
+
+    // Release old compressedDoc from previous runs before starting new compression
+    if (compressPdfState.compressedDoc) {
+      try {
+        await compressPdfState.compressedDoc.destroy();
+      } catch (_) {}
+      compressPdfState.compressedDoc = null;
+    }
 
     showProgressModal();
     const totalFiles = compressPdfState.files.length;
@@ -2706,9 +3150,10 @@
         item.isCompressed = true;
       }
 
+      await switchActiveFile(compressPdfState.activeFileIndex);
+      renderCompressPdfUI();
       hideProgressModal();
       compressPdfState.isProcessing = false;
-      renderCompressPdfUI();
       showToast(`บีบอัดเอกสาร PDF สำเร็จครบทั้ง ${totalFiles} ไฟล์!`, 'success');
     } catch (err) {
       console.error('executeCompressPdf error:', err);
