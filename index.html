@@ -464,15 +464,18 @@
                     <span class="dot-live"></span>
                     LIVE PREVIEW
                   </span>
-                  <span class="preview-page-indicator" id="previewPageIndicator">หน้า 1 / 1</span>
+                  <span class="preview-status-subtext">ตัวอย่าง PDF • อัปเดตตามการตั้งค่า</span>
                 </div>
-                <div class="preview-page-nav">
-                  <button type="button" class="btn-preview-nav" id="btnPreviewPrev" title="หน้าก่อนหน้า" aria-label="หน้าก่อนหน้า" disabled>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
-                  </button>
-                  <button type="button" class="btn-preview-nav" id="btnPreviewNext" title="หน้าถัดไป" aria-label="หน้าถัดไป" disabled>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
-                  </button>
+                <div class="preview-nav-cluster">
+                  <span class="preview-page-indicator" id="previewPageIndicator">หน้า 1 / 1</span>
+                  <div class="preview-page-nav">
+                    <button type="button" class="btn-preview-nav" id="btnPreviewPrev" title="หน้าก่อนหน้า" aria-label="หน้าก่อนหน้า" disabled>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button type="button" class="btn-preview-nav" id="btnPreviewNext" title="หน้าถัดไป" aria-label="หน้าถัดไป" disabled>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -495,134 +498,146 @@
               </div>
             </div>
 
-            <form class="settings-form" id="settingsForm" onsubmit="event.preventDefault();">
-              
-              <!-- Paper Size -->
-              <div class="setting-group">
-                <label for="settingPaper" class="setting-label">
-                  <span>ขนาดกระดาษ (Paper Size)</span>
-                </label>
-                <div class="select-wrapper">
-                  <select id="settingPaper" class="form-control">
-                    <option value="A4" selected>A4 (210 × 297 mm) — แนะนำ</option>
-                    <option value="A3">A3 (297 × 420 mm)</option>
-                    <option value="A5">A5 (148 × 210 mm)</option>
-                    <option value="Letter">US Letter (8.5 × 11 in)</option>
-                    <option value="Legal">US Legal (8.5 × 14 in)</option>
-                    <option value="Original">Original (ตามสัดส่วนภาพจริง)</option>
-                  </select>
-                </div>
+            <!-- Scrollable Settings Container -->
+            <div class="settings-scroll-wrapper">
+              <div class="settings-scroll-container" id="settingsScrollContainer">
+                <form class="settings-form" id="settingsForm" onsubmit="event.preventDefault();">
+                  
+                  <!-- Paper Size -->
+                  <div class="setting-group">
+                    <label for="settingPaper" class="setting-label">
+                      <span>ขนาดกระดาษ (Paper Size)</span>
+                    </label>
+                    <div class="select-wrapper">
+                      <select id="settingPaper" class="form-control">
+                        <option value="A4" selected>A4 (210 × 297 mm) — แนะนำ</option>
+                        <option value="A3">A3 (297 × 420 mm)</option>
+                        <option value="A5">A5 (148 × 210 mm)</option>
+                        <option value="Letter">US Letter (8.5 × 11 in)</option>
+                        <option value="Legal">US Legal (8.5 × 14 in)</option>
+                        <option value="Original">Original (ตามสัดส่วนภาพจริง)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Orientation -->
+                  <div class="setting-group">
+                    <label class="setting-label">
+                      <span>การจัดวางหน้า (Orientation)</span>
+                    </label>
+                    <div class="segmented-control" role="radiogroup" aria-label="Orientation">
+                      <label class="segment-btn">
+                        <input type="radio" name="orientation" value="auto" checked>
+                        <span class="segment-label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                          Auto
+                        </span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="orientation" value="portrait">
+                        <span class="segment-label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>
+                          แนวตั้ง
+                        </span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="orientation" value="landscape">
+                        <span class="segment-label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
+                          แนวนอน
+                        </span>
+                      </label>
+                    </div>
+                    <small class="setting-hint">Auto ปรับแนวตั้ง/แนวนอนอัตโนมัติตามรูปทรงของแต่ละรูป</small>
+                  </div>
+
+                  <!-- Image Placement -->
+                  <div class="setting-group">
+                    <label class="setting-label">
+                      <span>รูปแบบการวางรูป (Image Placement)</span>
+                    </label>
+                    <div class="segmented-control" role="radiogroup" aria-label="Image Placement">
+                      <label class="segment-btn">
+                        <input type="radio" name="placement" value="fit" checked>
+                        <span class="segment-label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+                          Fit (พอดีหน้า)
+                        </span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="placement" value="fill">
+                        <span class="segment-label">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+                          Fill (เต็มหน้า)
+                        </span>
+                      </label>
+                    </div>
+                    <small class="setting-hint">Fit: ไม่ตัดขอบรูปภาพใดๆ • Fill: ขยายเต็มหน้ากระดาษ (อาจครอป)</small>
+                  </div>
+
+                  <!-- Margins -->
+                  <div class="setting-group">
+                    <label class="setting-label">
+                      <span>ระยะขอบกระดาษ (Page Margins)</span>
+                    </label>
+                    <div class="segmented-control" role="radiogroup" aria-label="Page Margins">
+                      <label class="segment-btn">
+                        <input type="radio" name="margin" value="none" checked>
+                        <span class="segment-label">ไม่มีขอบ</span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="margin" value="small">
+                        <span class="segment-label">ขอบเล็ก</span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="margin" value="large">
+                        <span class="segment-label">ขอบกว้าง</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Quality -->
+                  <div class="setting-group">
+                    <label class="setting-label">
+                      <span>คุณภาพไฟล์ (Quality & Size)</span>
+                    </label>
+                    <div class="segmented-control" role="radiogroup" aria-label="Quality">
+                      <label class="segment-btn">
+                        <input type="radio" name="quality" value="small">
+                        <span class="segment-label">ขนาดเล็ก</span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="quality" value="balanced" checked>
+                        <span class="segment-label">สมดุล (แนะนำ)</span>
+                      </label>
+                      <label class="segment-btn">
+                        <input type="radio" name="quality" value="high">
+                        <span class="segment-label">ความคมชัดสูง</span>
+                      </label>
+                    </div>
+                    <small class="setting-hint">คุณภาพมีผลต่อไฟล์ที่ส่งออก ไม่ได้เปลี่ยนการจัดวางตัวอย่าง</small>
+                  </div>
+
+                  <!-- Filename -->
+                  <div class="setting-group">
+                    <label for="settingFilename" class="setting-label">
+                      <span>ชื่อไฟล์ PDF (File Name)</span>
+                    </label>
+                    <div class="input-addon-group">
+                      <input type="text" id="settingFilename" class="form-control" value="images-to-pdf" placeholder="images-to-pdf">
+                      <span class="addon-suffix">.pdf</span>
+                    </div>
+                  </div>
+
+                </form>
               </div>
 
-              <!-- Orientation -->
-              <div class="setting-group">
-                <label class="setting-label">
-                  <span>การจัดวางหน้า (Orientation)</span>
-                </label>
-                <div class="segmented-control" role="radiogroup" aria-label="Orientation">
-                  <label class="segment-btn">
-                    <input type="radio" name="orientation" value="auto" checked>
-                    <span class="segment-label">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                      Auto
-                    </span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="orientation" value="portrait">
-                    <span class="segment-label">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/></svg>
-                      แนวตั้ง
-                    </span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="orientation" value="landscape">
-                    <span class="segment-label">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
-                      แนวนอน
-                    </span>
-                  </label>
-                </div>
-                <small class="setting-hint">Auto ปรับแนวตั้ง/แนวนอนอัตโนมัติตามรูปทรงของแต่ละรูป</small>
-              </div>
+              <!-- Scroll Cue Fade at bottom of scrollable area -->
+              <div class="scroll-fade-cue hidden" id="scrollFadeCue" aria-hidden="true"></div>
+            </div>
 
-              <!-- Image Placement -->
-              <div class="setting-group">
-                <label class="setting-label">
-                  <span>รูปแบบการวางรูป (Image Placement)</span>
-                </label>
-                <div class="segmented-control" role="radiogroup" aria-label="Image Placement">
-                  <label class="segment-btn">
-                    <input type="radio" name="placement" value="fit" checked>
-                    <span class="segment-label">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
-                      Fit (พอดีหน้า)
-                    </span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="placement" value="fill">
-                    <span class="segment-label">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
-                      Fill (เต็มหน้า)
-                    </span>
-                  </label>
-                </div>
-                <small class="setting-hint">Fit: ไม่ตัดขอบรูปภาพใดๆ • Fill: ขยายเต็มหน้ากระดาษ (อาจครอป)</small>
-              </div>
-
-              <!-- Margins -->
-              <div class="setting-group">
-                <label class="setting-label">
-                  <span>ระยะขอบกระดาษ (Page Margins)</span>
-                </label>
-                <div class="segmented-control" role="radiogroup" aria-label="Page Margins">
-                  <label class="segment-btn">
-                    <input type="radio" name="margin" value="none" checked>
-                    <span class="segment-label">ไม่มีขอบ</span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="margin" value="small">
-                    <span class="segment-label">ขอบเล็ก</span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="margin" value="large">
-                    <span class="segment-label">ขอบกว้าง</span>
-                  </label>
-                </div>
-              </div>
-
-              <!-- Quality -->
-              <div class="setting-group">
-                <label class="setting-label">
-                  <span>คุณภาพไฟล์ (Quality & Size)</span>
-                </label>
-                <div class="segmented-control" role="radiogroup" aria-label="Quality">
-                  <label class="segment-btn">
-                    <input type="radio" name="quality" value="small">
-                    <span class="segment-label">ขนาดเล็ก</span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="quality" value="balanced" checked>
-                    <span class="segment-label">สมดุล (แนะนำ)</span>
-                  </label>
-                  <label class="segment-btn">
-                    <input type="radio" name="quality" value="high">
-                    <span class="segment-label">ความคมชัดสูง</span>
-                  </label>
-                </div>
-                <small class="setting-hint">คุณภาพมีผลต่อไฟล์ที่ส่งออก ไม่ได้เปลี่ยนการจัดวางตัวอย่าง</small>
-              </div>
-
-              <!-- Filename -->
-              <div class="setting-group">
-                <label for="settingFilename" class="setting-label">
-                  <span>ชื่อไฟล์ PDF (File Name)</span>
-                </label>
-                <div class="input-addon-group">
-                  <input type="text" id="settingFilename" class="form-control" value="images-to-pdf" placeholder="images-to-pdf">
-                  <span class="addon-suffix">.pdf</span>
-                </div>
-              </div>
-
+            <!-- Fixed Footer Actions -->
+            <div class="settings-footer-action">
               <!-- Primary Action CTA Button -->
               <div class="action-box">
                 <button type="button" class="btn btn-primary btn-cta" id="btnCreatePdf">
@@ -645,8 +660,7 @@
                 </svg>
                 <p>ไม่มีการส่งไฟล์ใดๆ ออกนอกเครื่อง ประมวลผลในหน่วยความจำเบราว์เซอร์เท่านั้น</p>
               </div>
-
-            </form>
+            </div>
           </div>
         </aside>
 

@@ -191,9 +191,11 @@
     previewSpecPlacement: document.getElementById('previewSpecPlacement'),
     previewSpecMargin: document.getElementById('previewSpecMargin'),
 
-    // Settings
+    // Settings & Scroll Containers
     settingPaper: document.getElementById('settingPaper'),
     settingFilename: document.getElementById('settingFilename'),
+    settingsScrollContainer: document.getElementById('settingsScrollContainer'),
+    scrollFadeCue: document.getElementById('scrollFadeCue'),
     btnCreatePdf: document.getElementById('btnCreatePdf'),
     btnCtaSubtext: document.getElementById('btnCtaSubtext'),
     
@@ -317,27 +319,35 @@
     // Settings Controls
     el.settingPaper.addEventListener('change', (e) => {
       state.settings.paper = e.target.value;
+      renderThumbnails(false);
       renderLivePreview();
+      updateScrollFadeCue();
     });
 
     document.querySelectorAll('input[name="orientation"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         state.settings.orientation = e.target.value;
+        renderThumbnails(false);
         renderLivePreview();
+        updateScrollFadeCue();
       });
     });
 
     document.querySelectorAll('input[name="placement"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         state.settings.placement = e.target.value;
+        renderThumbnails(false);
         renderLivePreview();
+        updateScrollFadeCue();
       });
     });
 
     document.querySelectorAll('input[name="margin"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
         state.settings.margin = e.target.value;
+        renderThumbnails(false);
         renderLivePreview();
+        updateScrollFadeCue();
       });
     });
 
@@ -350,6 +360,15 @@
 
     el.settingFilename.addEventListener('input', (e) => {
       state.settings.filename = e.target.value;
+    });
+
+    // Scroll Fade Cue for Settings
+    if (el.settingsScrollContainer) {
+      el.settingsScrollContainer.addEventListener('scroll', updateScrollFadeCue, { passive: true });
+    }
+    window.addEventListener('resize', () => {
+      updateScrollFadeCue();
+      renderLivePreview();
     });
 
     // Preview Page Navigation Buttons
@@ -785,6 +804,7 @@
         }
         renderThumbnails(true);
         renderLivePreview();
+        setTimeout(updateScrollFadeCue, 50);
       }
 
       updateCountBadge();
@@ -839,9 +859,10 @@
       });
       setupSortable();
     } else {
-      // Just update existing card badges and indices for performance
+      // Just update existing card badges, indices and geometry visuals for performance
       const cards = el.thumbnailGrid.querySelectorAll('.thumb-card');
       cards.forEach((card, index) => {
+        const item = state.items[index];
         const badge = card.querySelector('.page-badge');
         if (badge) badge.textContent = `#${index + 1}`;
         
@@ -850,6 +871,23 @@
           card.classList.add('selected');
         } else {
           card.classList.remove('selected');
+        }
+
+        // Reflect document-level settings & orientation on thumbnail card
+        if (item) {
+          const rot = (item.rotation || 0) % 360;
+          const isRot90 = (rot === 90 || rot === 270);
+          const effW = isRot90 ? (item.height || 1) : (item.width || 1);
+          const effH = isRot90 ? (item.width || 1) : (item.height || 1);
+          const pageDims = calculatePageDimensions(item, state.settings, effW / effH);
+          const isCardLandscape = pageDims.pageWidth > pageDims.pageHeight;
+          const prevBox = card.querySelector('.card-preview-container');
+          if (prevBox) {
+            prevBox.classList.toggle('orientation-landscape', isCardLandscape);
+            prevBox.classList.toggle('orientation-portrait', !isCardLandscape);
+            prevBox.dataset.margin = state.settings.margin;
+            prevBox.dataset.placement = state.settings.placement;
+          }
         }
 
         // Update keyboard reorder buttons disabled state
@@ -882,6 +920,14 @@
     // Formatting size
     const sizeStr = formatFileSize(item.size);
 
+    // Calculate initial thumbnail orientation from shared page geometry
+    const rot = (item.rotation || 0) % 360;
+    const isRot90 = (rot === 90 || rot === 270);
+    const effW = isRot90 ? (item.height || 1) : (item.width || 1);
+    const effH = isRot90 ? (item.width || 1) : (item.height || 1);
+    const pageDims = calculatePageDimensions(item, state.settings, effW / effH);
+    const isCardLandscape = pageDims.pageWidth > pageDims.pageHeight;
+
     card.innerHTML = `
       <div class="card-top-bar">
         <span class="page-badge">#${index + 1}</span>
@@ -895,7 +941,10 @@
         </div>
       </div>
       
-      <div class="card-preview-container" title="ลากเพื่อสลับลำดับ">
+      <div class="card-preview-container ${isCardLandscape ? 'orientation-landscape' : 'orientation-portrait'}" 
+           data-margin="${state.settings.margin}" 
+           data-placement="${state.settings.placement}" 
+           title="ลากเพื่อสลับลำดับ">
         <img class="card-preview-img" src="${item.objectUrl}" alt="${escapeHtml(item.name)}" draggable="false" style="transform: rotate(${item.rotation}deg);">
       </div>
 
@@ -926,6 +975,20 @@
       item.rotation = (item.rotation + 90) % 360;
       const img = card.querySelector('.card-preview-img');
       img.style.transform = `rotate(${item.rotation}deg)`;
+
+      // Update orientation frame on rotation
+      const newRot = (item.rotation || 0) % 360;
+      const newRot90 = (newRot === 90 || newRot === 270);
+      const newEffW = newRot90 ? (item.height || 1) : (item.width || 1);
+      const newEffH = newRot90 ? (item.width || 1) : (item.height || 1);
+      const newPageDims = calculatePageDimensions(item, state.settings, newEffW / newEffH);
+      const newIsLandscape = newPageDims.pageWidth > newPageDims.pageHeight;
+      const prevBox = card.querySelector('.card-preview-container');
+      if (prevBox) {
+        prevBox.classList.toggle('orientation-landscape', newIsLandscape);
+        prevBox.classList.toggle('orientation-portrait', !newIsLandscape);
+      }
+
       const curIdx = state.items.findIndex(it => it.id === item.id);
       if (curIdx === state.selectedIndex) {
         renderLivePreview();
@@ -998,6 +1061,7 @@
         if (img) img.style.transform = `rotate(${it.rotation}deg)`;
       }
     });
+    renderThumbnails(false);
     renderLivePreview();
     showToast('หมุนทุกภาพ 90° เรียบร้อย', 'success');
   }
@@ -1281,6 +1345,20 @@
     renderLivePreview();
   }
 
+  // --- Scroll Discoverability Cue ---
+  function updateScrollFadeCue() {
+    const container = el.settingsScrollContainer;
+    const cue = el.scrollFadeCue;
+    if (!container || !cue) return;
+    const isScrollable = container.scrollHeight > (container.clientHeight + 4);
+    const isAtBottom = (container.scrollTop + container.clientHeight) >= (container.scrollHeight - 6);
+    if (isScrollable && !isAtBottom) {
+      cue.classList.remove('hidden');
+    } else {
+      cue.classList.add('hidden');
+    }
+  }
+
   // --- Live PDF Sheet Preview Engine ---
   let previewRenderTimer = null;
   function renderLivePreview() {
@@ -1554,6 +1632,7 @@
     calculatePageDimensions,
     calculateImageDrawRect,
     renderLivePreview,
+    updateScrollFadeCue,
     selectCard,
     switchTool,
     syncUI,

@@ -1272,6 +1272,24 @@ button, input, select, textarea {
   justify-content: center;
   position: relative;
   cursor: grab;
+  transition: aspect-ratio 0.25s cubic-bezier(0.2, 0, 0, 1), padding 0.2s ease;
+  box-sizing: border-box;
+}
+
+.card-preview-container.orientation-landscape {
+  aspect-ratio: 4 / 3;
+}
+
+.card-preview-container.orientation-portrait {
+  aspect-ratio: 3 / 4;
+}
+
+.card-preview-container[data-margin="small"] {
+  padding: 8px;
+}
+
+.card-preview-container[data-margin="large"] {
+  padding: 16px;
 }
 
 .card-preview-container:active {
@@ -1287,6 +1305,18 @@ button, input, select, textarea {
   -webkit-user-drag: none;
   user-drag: none;
   user-select: none;
+}
+
+.card-preview-container[data-placement="fill"] .card-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-preview-container[data-placement="fit"] .card-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 /* Metadata Footer */
@@ -1393,43 +1423,39 @@ button, input, select, textarea {
    Right: Settings Sidebar Panel
    ========================================================================== */
 
-.workspace-right {
+#workspaceScreen .workspace-right {
   background-color: var(--bg-panel);
-  padding: 24px;
+  padding: 18px 22px;
   display: flex;
   flex-direction: column;
-}
-
-.settings-card {
   position: sticky;
-  top: 85px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  max-height: calc(100vh - 105px);
-  overflow-y: auto;
-  padding-right: 4px;
+  top: 56px;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* Custom Scrollbar */
-.settings-card::-webkit-scrollbar {
-  width: 5px;
-}
-.settings-card::-webkit-scrollbar-track {
-  background: transparent;
-}
-.settings-card::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 999px;
+#workspaceScreen .settings-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  position: static;
+  gap: 0;
+  padding-right: 0;
 }
 
 .settings-header {
-  padding-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .settings-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -1446,12 +1472,15 @@ button, input, select, textarea {
 .live-preview-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 14px;
+  padding: 12px 14px;
   transition: border-color var(--transition-fast);
+  flex-shrink: 0;
+  margin-top: 10px;
+  margin-bottom: 10px;
 }
 
 .live-preview-panel:hover {
@@ -1469,6 +1498,7 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .live-preview-badge {
@@ -1484,12 +1514,29 @@ button, input, select, textarea {
   border: 1px solid rgba(245, 158, 11, 0.25);
   padding: 2px 7px;
   border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.preview-status-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-nav-cluster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .preview-page-indicator {
   font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .preview-page-nav {
@@ -1502,8 +1549,8 @@ button, input, select, textarea {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-sm);
   background-color: var(--bg-panel);
   border: 1px solid var(--border-subtle);
@@ -1526,14 +1573,14 @@ button, input, select, textarea {
 /* Stage: Gray workspace container for paper simulation */
 .live-preview-stage {
   width: 100%;
-  height: 250px;
+  height: 170px;
   background-color: #0d0f12;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 14px;
+  padding: 10px;
   overflow: hidden;
   position: relative;
 }
@@ -1585,6 +1632,82 @@ button, input, select, textarea {
 
 .spec-divider {
   opacity: 0.5;
+}
+
+/* ==========================================================================
+   Isolated Scrollable Settings Area
+   ========================================================================== */
+
+.settings-scroll-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.settings-scroll-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  padding-bottom: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+/* Custom Discoverable Scrollbar for Settings */
+.settings-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+.settings-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-scroll-container::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  transition: background-color var(--transition-fast);
+}
+[data-theme="light"] .settings-scroll-container::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.22);
+}
+.settings-scroll-container::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-primary);
+}
+
+/* Scroll Cue Fade at bottom of scroll viewport */
+.scroll-fade-cue {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 6px;
+  height: 32px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(17, 19, 23, 0) 0%, var(--bg-panel) 90%);
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+}
+[data-theme="light"] .scroll-fade-cue {
+  background: linear-gradient(to bottom, rgba(248, 249, 250, 0) 0%, var(--bg-panel) 90%);
+}
+.scroll-fade-cue.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Fixed Footer Actions in Settings Card */
+.settings-footer-action {
+  flex-shrink: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .settings-form {
@@ -2288,9 +2411,14 @@ select option {
     padding: 16px;
   }
 
-  .workspace-right {
+  .workspace-right,
+  #workspaceScreen .workspace-right {
     width: 100% !important;
     padding: 16px;
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
   
   .thumbnail-grid {
@@ -2298,10 +2426,38 @@ select option {
     gap: 12px;
   }
   
-  .settings-card {
+  .settings-card,
+  #workspaceScreen .settings-card {
     position: static;
+    height: auto;
     max-height: none;
-    overflow-y: visible;
+    overflow: visible;
+    gap: 16px;
+  }
+
+  .settings-scroll-wrapper {
+    position: static;
+    overflow: visible;
+    height: auto;
+    flex: none;
+    margin-bottom: 0;
+  }
+
+  .settings-scroll-container {
+    overflow: visible;
+    height: auto;
+    max-height: none;
+    padding-right: 0;
+  }
+
+  .scroll-fade-cue {
+    display: none !important;
+  }
+
+  .settings-footer-action {
+    border-top: none;
+    padding-top: 0;
+    position: static;
   }
 
   .live-preview-stage {
