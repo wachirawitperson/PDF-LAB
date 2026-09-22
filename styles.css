@@ -3518,11 +3518,7 @@ select option {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 0;
   width: 100%;
-  max-width: 1260px;
-  margin: 0 auto;
   min-height: calc(100vh - 65px);
-  border-left: 1px solid var(--border-subtle);
-  border-right: 1px solid var(--border-subtle);
 }
 
 #toolOrganizePdf {
@@ -3535,6 +3531,7 @@ select option {
   flex-direction: column;
   gap: 16px;
   min-width: 0;
+  border-right: 1px solid var(--border-subtle);
 }
 
 #organizeWorkspaceScreen .workspace-toolbar {
@@ -3544,15 +3541,13 @@ select option {
 #organizeWorkspaceScreen .workspace-right {
   width: 360px;
   min-width: 360px;
-  border-left: 1px solid var(--border-subtle);
   background-color: var(--bg-panel);
   padding: 24px;
 }
 
 #organizeThumbnailGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 205px));
-  justify-content: center;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
   padding-bottom: 40px;
   width: 100%;
@@ -3567,6 +3562,8 @@ select option {
   background-color: var(--bg-panel);
   box-shadow: var(--shadow-sm);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 [data-theme="light"] .organize-page-card {
@@ -3639,6 +3636,13 @@ select option {
 }
 
 /* Organize Responsive Breakpoints */
+@media (max-width: 1279px) and (min-width: 1024px) {
+  #organizeThumbnailGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+  }
+}
+
 @media (max-width: 1200px) {
   #organizeWorkspaceScreen {
     grid-template-columns: minmax(0, 1fr) 320px;
@@ -3651,9 +3655,12 @@ select option {
   #organizeWorkspaceScreen .workspace-left {
     padding: 20px;
   }
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
   #organizeThumbnailGrid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 195px));
-    gap: 14px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 
@@ -3668,10 +3675,6 @@ select option {
   }
   #organizeWorkspaceScreen .workspace-left {
     padding: 16px;
-  }
-  #organizeThumbnailGrid {
-    grid-template-columns: repeat(auto-fill, minmax(145px, 175px));
-    gap: 12px;
   }
 }
 
@@ -3701,7 +3704,7 @@ select option {
     padding: 16px 12px !important;
   }
   #organizeThumbnailGrid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
     padding-bottom: 20px !important;
     max-width: 100% !important;
@@ -3709,7 +3712,7 @@ select option {
   }
 }
 
-@media (max-width: 350px) {
+@media (max-width: 380px) {
   #organizeThumbnailGrid {
     grid-template-columns: 1fr !important;
   }
