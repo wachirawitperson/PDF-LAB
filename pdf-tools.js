@@ -122,10 +122,11 @@
   // TOOL 2: รวม PDF (Merge PDF)
   // ==========================================================================
   const mergeState = {
-    files: [], // Array of { id, file, name, size, pageCount, buffer }
+    files: [], // Array of { id, file, name, size, pageCount, buffer, coverDataUrl }
     pages: [], // Array of { id, fileId, fileName, originalPageNum, rotation, dataUrl }
     sortable: null,
-    hasCustomPageDrag: false
+    hasCustomPageDrag: false,
+    viewMode: 'cover' // 'cover' | 'all-pages' (Default: 'cover')
   };
 
   function initMergeTool() {
@@ -135,6 +136,8 @@
     const btnAddMore = document.getElementById('btnAddMoreMergePdf');
     const btnClear = document.getElementById('btnClearMergePdf');
     const btnExecute = document.getElementById('btnExecuteMerge');
+    const btnCover = document.getElementById('btnMergeViewCover');
+    const btnAll = document.getElementById('btnMergeViewAllPages');
 
     if (!fileInput || !dropZone) return;
 
@@ -155,6 +158,9 @@
       await handleMergeFiles(files);
     });
 
+    btnCover?.addEventListener('click', () => setMergeViewMode('cover'));
+    btnAll?.addEventListener('click', () => setMergeViewMode('all-pages'));
+
     btnClear?.addEventListener('click', () => {
       mergeState.files = [];
       mergeState.pages = [];
@@ -164,6 +170,16 @@
     });
 
     btnExecute?.addEventListener('click', executeMerge);
+  }
+
+  function setMergeViewMode(mode) {
+    if (mergeState.viewMode === mode) return;
+    mergeState.viewMode = mode;
+    // When switching to all-pages mode without previous custom drag, sync order from files
+    if (mode === 'all-pages' && !mergeState.hasCustomPageDrag) {
+      syncMergeState();
+    }
+    renderMergeUI();
   }
 
   async function handleMergeFiles(files) {
@@ -189,7 +205,8 @@
           name: file.name,
           size: file.size,
           pageCount: loadedPdf.pageCount,
-          buffer: loadedPdf.buffer
+          buffer: loadedPdf.buffer,
+          coverDataUrl: null
         };
         mergeState.files.push(fileObj);
 
@@ -269,10 +286,13 @@
     const countBadge = document.getElementById('mergeFileCount');
     const summaryFiles = document.getElementById('mergeSummaryFiles');
     const summaryPages = document.getElementById('mergeSummaryPages');
+    const btnCover = document.getElementById('btnMergeViewCover');
+    const btnAll = document.getElementById('btnMergeViewAllPages');
+    const reorderText = document.getElementById('mergeReorderText');
 
     if (!uploadScreen || !workspaceScreen) return;
 
-    if (mergeState.files.length === 0 || mergeState.pages.length === 0) {
+    if (mergeState.files.length === 0) {
       uploadScreen.classList.remove('hidden');
       workspaceScreen.classList.add('hidden');
       if (fileListEl) fileListEl.innerHTML = '';
@@ -282,6 +302,21 @@
     uploadScreen.classList.add('hidden');
     workspaceScreen.classList.remove('hidden');
 
+    // Update segmented control buttons state
+    if (btnCover && btnAll) {
+      const isCover = mergeState.viewMode === 'cover';
+      btnCover.classList.toggle('active', isCover);
+      btnCover.setAttribute('aria-pressed', String(isCover));
+      btnAll.classList.toggle('active', !isCover);
+      btnAll.setAttribute('aria-pressed', String(!isCover));
+    }
+
+    if (reorderText) {
+      reorderText.textContent = mergeState.viewMode === 'cover'
+        ? 'ลากการ์ดเพื่อจัดลำดับไฟล์ PDF'
+        : 'ลากการ์ดเพื่อจัดลำดับหน้าที่จะรวม';
+    }
+
     const totalPages = mergeState.pages.length;
     if (countBadge) countBadge.textContent = `${mergeState.files.length} ไฟล์ • ${totalPages} หน้า`;
     if (summaryFiles) summaryFiles.textContent = `${mergeState.files.length} ไฟล์`;
@@ -290,6 +325,104 @@
     if (!fileListEl) return;
     fileListEl.innerHTML = '';
 
+    // Toggle grid classes for sizing
+    fileListEl.classList.toggle('merge-grid-cover', mergeState.viewMode === 'cover');
+    fileListEl.classList.toggle('merge-grid-all-pages', mergeState.viewMode === 'all-pages');
+
+    if (mergeState.viewMode === 'cover') {
+      renderMergeCoverCards(fileListEl);
+    } else {
+      renderMergeAllPageCards(fileListEl);
+    }
+  }
+
+  function renderMergeCoverCards(fileListEl) {
+    mergeState.files.forEach((fileObj, idx) => {
+      const card = document.createElement('div');
+      card.className = 'merge-page-card merge-file-cover-card';
+      card.dataset.fileId = fileObj.id;
+
+      card.innerHTML = `
+        <div class="merge-card-header">
+          <div class="merge-card-header-left">
+            <span class="merge-page-badge">#${idx + 1}</span>
+            <span class="merge-cover-filename-short" title="${escapeHtml(fileObj.name)}">${escapeHtml(fileObj.name)}</span>
+          </div>
+          <div class="merge-card-actions">
+            <button type="button" class="btn-merge-action btn-merge-delete" title="ลบไฟล์นี้" aria-label="ลบไฟล์ ${escapeHtml(fileObj.name)}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="merge-card-thumb-frame">
+          <div class="merge-thumb-skeleton">กำลังโหลด...</div>
+        </div>
+
+        <div class="merge-card-footer">
+          <span class="merge-file-tag" title="${fileObj.pageCount} หน้า">${fileObj.pageCount} หน้า</span>
+          <span class="merge-file-page-tag">${formatFileSize(fileObj.size)}</span>
+        </div>
+      `;
+
+      // Delete entire file action
+      const btnDelete = card.querySelector('.btn-merge-delete');
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const fIdx = mergeState.files.findIndex(f => f.id === fileObj.id);
+        if (fIdx !== -1) {
+          mergeState.files.splice(fIdx, 1);
+          mergeState.pages = mergeState.pages.filter(p => p.fileId !== fileObj.id);
+          renderMergeUI();
+        }
+      });
+
+      fileListEl.appendChild(card);
+
+      // Render cover thumbnail (Page 1)
+      const thumbFrame = card.querySelector('.merge-card-thumb-frame');
+      if (fileObj.coverDataUrl) {
+        thumbFrame.innerHTML = `<img src="${fileObj.coverDataUrl}" alt="${escapeHtml(fileObj.name)}" class="merge-card-thumb-img">`;
+      } else if (fileObj.buffer) {
+        renderPdfThumbnail(fileObj.buffer, 1, 0.5).then(url => {
+          fileObj.coverDataUrl = url;
+          if (thumbFrame) {
+            thumbFrame.innerHTML = `<img src="${url}" alt="${escapeHtml(fileObj.name)}" class="merge-card-thumb-img">`;
+          }
+        }).catch(() => {
+          if (thumbFrame) {
+            thumbFrame.innerHTML = `<span class="preview-err">หน้า 1</span>`;
+          }
+        });
+      }
+    });
+
+    // Setup SortableJS for files reordering
+    if (window.Sortable) {
+      if (mergeState.sortable) mergeState.sortable.destroy();
+      mergeState.sortable = new window.Sortable(fileListEl, {
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        filter: '.btn-merge-action, svg, path',
+        preventOnFilter: false,
+        onEnd: function(evt) {
+          if (evt.oldIndex !== evt.newIndex) {
+            const [moved] = mergeState.files.splice(evt.oldIndex, 1);
+            mergeState.files.splice(evt.newIndex, 0, moved);
+            if (!mergeState.hasCustomPageDrag) {
+              syncMergeState();
+            }
+            renderMergeUI();
+          }
+        }
+      });
+    }
+  }
+
+  function renderMergeAllPageCards(fileListEl) {
     const fileBufferMap = new Map(mergeState.files.map(f => [f.id, f.buffer]));
 
     mergeState.pages.forEach((pageItem, idx) => {
@@ -345,7 +478,6 @@
         const pIdx = mergeState.pages.findIndex(p => p.id === pageItem.id);
         if (pIdx !== -1) {
           mergeState.pages.splice(pIdx, 1);
-          // Check if file has any remaining pages
           const remainingForFile = mergeState.pages.filter(p => p.fileId === pageItem.fileId);
           if (remainingForFile.length === 0) {
             const fIdx = mergeState.files.findIndex(f => f.id === pageItem.fileId);
@@ -401,7 +533,7 @@
   async function executeMerge() {
     syncMergeState();
 
-    if (mergeState.pages.length < 1) {
+    if (mergeState.files.length < 1) {
       showToast('กรุณาเพิ่มไฟล์ PDF ก่อนทำการรวม', 'error');
       return;
     }
@@ -414,7 +546,6 @@
     showProgressModal();
     try {
       const mergedPdf = await window.PDFLib.PDFDocument.create();
-      const totalPages = mergeState.pages.length;
 
       // Pre-load all source PDF documents
       const loadedDocs = new Map();
@@ -425,22 +556,58 @@
         }
       }
 
-      for (let i = 0; i < totalPages; i++) {
-        const pageItem = mergeState.pages[i];
-        updateProgress(i + 1, totalPages, `กำลังรวมหน้า ${i + 1} จาก ${totalPages}...`);
-        const srcDoc = loadedDocs.get(pageItem.fileId);
-        if (srcDoc) {
-          const [copiedPage] = await mergedPdf.copyPages(srcDoc, [pageItem.originalPageNum - 1]);
-          if (pageItem.rotation) {
-            const curRot = copiedPage.getRotation().angle;
-            copiedPage.setRotation(window.PDFLib.degrees((curRot + pageItem.rotation) % 360));
-          }
-          mergedPdf.addPage(copiedPage);
+      if (mergeState.viewMode === 'cover') {
+        // Mode 1: Cover Mode - iterate files in order
+        let totalPages = 0;
+        for (const f of mergeState.files) {
+          totalPages += f.pageCount;
         }
-        if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+
+        let copiedCount = 0;
+        for (let fIdx = 0; fIdx < mergeState.files.length; fIdx++) {
+          const fileItem = mergeState.files[fIdx];
+          const srcDoc = loadedDocs.get(fileItem.id);
+          if (!srcDoc) continue;
+
+          // Find pages belonging to this file from mergeState.pages
+          const filePages = mergeState.pages.filter(p => p.fileId === fileItem.id);
+          const pagesToCopy = filePages.length > 0 ? filePages : Array.from({ length: fileItem.pageCount }, (_, i) => ({
+            originalPageNum: i + 1,
+            rotation: 0
+          }));
+
+          for (const p of pagesToCopy) {
+            copiedCount++;
+            updateProgress(copiedCount, totalPages, `กำลังรวมหน้า ${copiedCount} จาก ${totalPages}...`);
+            const [copiedPage] = await mergedPdf.copyPages(srcDoc, [p.originalPageNum - 1]);
+            if (p.rotation) {
+              const curRot = copiedPage.getRotation().angle;
+              copiedPage.setRotation(window.PDFLib.degrees((curRot + p.rotation) % 360));
+            }
+            mergedPdf.addPage(copiedPage);
+          }
+          if (fIdx % 2 === 0) await new Promise(r => setTimeout(r, 0));
+        }
+      } else {
+        // Mode 2: All Pages Mode - iterate pages in user's custom page order
+        const totalPages = mergeState.pages.length;
+        for (let i = 0; i < totalPages; i++) {
+          const pageItem = mergeState.pages[i];
+          updateProgress(i + 1, totalPages, `กำลังรวมหน้า ${i + 1} จาก ${totalPages}...`);
+          const srcDoc = loadedDocs.get(pageItem.fileId);
+          if (srcDoc) {
+            const [copiedPage] = await mergedPdf.copyPages(srcDoc, [pageItem.originalPageNum - 1]);
+            if (pageItem.rotation) {
+              const curRot = copiedPage.getRotation().angle;
+              copiedPage.setRotation(window.PDFLib.degrees((curRot + pageItem.rotation) % 360));
+            }
+            mergedPdf.addPage(copiedPage);
+          }
+          if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+        }
       }
 
-      updateProgress(totalPages, totalPages, 'กำลังจัดทำไฟล์ PDF รวม...');
+      updateProgress(mergedPdf.getPageCount(), mergedPdf.getPageCount(), 'กำลังจัดทำไฟล์ PDF รวม...');
       const mergedBytes = await mergedPdf.save();
       downloadBlob(new Blob([mergedBytes], { type: 'application/pdf' }), filename);
       hideProgressModal();
@@ -453,13 +620,17 @@
   }
 
   // ==========================================================================
+  // ==========================================================================
   // TOOL 3: แยก PDF (Split / Extract PDF)
   // ==========================================================================
   const splitState = {
     file: null,
     buffer: null,
     totalPages: 0,
-    selectedPages: new Set()
+    selectedPages: new Set(),
+    splitMode: 'select', // 'all-pages' | 'select' | 'ranges'
+    ranges: [{ start: 1, end: 1 }],
+    combineRanges: false
   };
 
   function initSplitTool() {
@@ -472,6 +643,13 @@
     const btnApplyRange = document.getElementById('btnSplitApplyRange');
     const rangeInput = document.getElementById('splitRangeInput');
     const btnExecute = document.getElementById('btnExecuteSplit');
+
+    const btnModeAllPages = document.getElementById('btnSplitModeAllPages');
+    const btnModeSelect = document.getElementById('btnSplitModeSelect');
+    const btnModeRanges = document.getElementById('btnSplitModeRanges');
+    const btnAddRange = document.getElementById('btnAddSplitRange');
+    const combineCheckbox = document.getElementById('splitCombineRanges');
+    const filenameInput = document.getElementById('splitOutputFilename');
 
     if (!fileInput || !dropZone) return;
 
@@ -496,6 +674,11 @@
       splitState.buffer = null;
       splitState.totalPages = 0;
       splitState.selectedPages.clear();
+      splitState.ranges = [{ start: 1, end: 1 }];
+      splitState.combineRanges = false;
+      splitState.splitMode = 'select';
+      const cb = document.getElementById('splitCombineRanges');
+      if (cb) cb.checked = false;
       renderSplitUI();
     });
 
@@ -521,7 +704,262 @@
       showToast(`เลือกแล้ว ${parsed.size} หน้า`, 'info');
     });
 
+    btnModeAllPages?.addEventListener('click', () => setSplitMode('all-pages'));
+    btnModeSelect?.addEventListener('click', () => setSplitMode('select'));
+    btnModeRanges?.addEventListener('click', () => setSplitMode('ranges'));
+
+    btnAddRange?.addEventListener('click', () => addRangeRow());
+
+    combineCheckbox?.addEventListener('change', (e) => {
+      splitState.combineRanges = e.target.checked;
+      checkRangeOverlap();
+      updateSplitModeUI();
+    });
+
+    filenameInput?.addEventListener('input', () => {
+      filenameInput.dataset.autoName = 'custom';
+    });
+
     btnExecute?.addEventListener('click', executeSplit);
+  }
+
+  function setSplitMode(mode) {
+    if (!['all-pages', 'select', 'ranges'].includes(mode)) return;
+    splitState.splitMode = mode;
+
+    const btnAllPages = document.getElementById('btnSplitModeAllPages');
+    const btnSelect = document.getElementById('btnSplitModeSelect');
+    const btnRanges = document.getElementById('btnSplitModeRanges');
+
+    btnAllPages?.classList.toggle('active', mode === 'all-pages');
+    btnAllPages?.setAttribute('aria-pressed', String(mode === 'all-pages'));
+    btnSelect?.classList.toggle('active', mode === 'select');
+    btnSelect?.setAttribute('aria-pressed', String(mode === 'select'));
+    btnRanges?.classList.toggle('active', mode === 'ranges');
+    btnRanges?.setAttribute('aria-pressed', String(mode === 'ranges'));
+
+    const banner = document.getElementById('splitAllPagesBanner');
+    const selectToolbar = document.getElementById('splitSelectToolbar');
+    const grid = document.getElementById('splitThumbnailGrid');
+    const panelRanges = document.getElementById('splitPanelRanges');
+
+    if (banner) banner.classList.toggle('hidden', mode !== 'all-pages');
+    if (selectToolbar) selectToolbar.classList.toggle('hidden', mode !== 'select');
+    if (grid) grid.classList.toggle('hidden', mode === 'ranges');
+    if (panelRanges) panelRanges.classList.toggle('hidden', mode !== 'ranges');
+
+    if (mode === 'ranges') {
+      renderRangeRows();
+    }
+
+    updateSplitModeUI();
+  }
+
+  function updateSplitModeUI() {
+    const title = document.getElementById('splitSettingsTitle');
+    const summaryLabel = document.getElementById('splitSummaryLabel');
+    const summaryVal = document.getElementById('splitSummarySelected');
+    const filenameLabel = document.getElementById('splitOutputFilenameLabel');
+    const filenameInput = document.getElementById('splitOutputFilename');
+    const extSpan = document.getElementById('splitOutputExt');
+    const btnText = document.getElementById('btnExecuteSplitText');
+
+    const baseName = splitState.file ? splitState.file.name.replace(/\.[^/.]+$/, '') : 'document';
+    const isCustom = filenameInput?.dataset.autoName === 'custom';
+
+    if (splitState.splitMode === 'all-pages') {
+      if (title) title.textContent = 'แยกทุกหน้าเป็นไฟล์';
+      if (summaryLabel) summaryLabel.textContent = 'จำนวนหน้าทั้งหมด:';
+      if (summaryVal) summaryVal.textContent = `${splitState.totalPages} หน้า (${splitState.totalPages} ไฟล์)`;
+      if (filenameLabel) filenameLabel.textContent = 'ชื่อไฟล์ ZIP';
+      if (extSpan) extSpan.textContent = '.zip';
+      if (btnText) btnText.textContent = 'แยกทุกหน้าเป็น ZIP';
+      if (filenameInput && !isCustom) {
+        filenameInput.value = `${baseName}-split-pages`;
+      }
+    } else if (splitState.splitMode === 'select') {
+      if (title) title.textContent = 'แยกหน้าที่เลือก';
+      if (summaryLabel) summaryLabel.textContent = 'หน้าที่เลือก:';
+      if (summaryVal) summaryVal.textContent = `เลือกแล้ว ${splitState.selectedPages.size} จาก ${splitState.totalPages} หน้า`;
+      if (filenameLabel) filenameLabel.textContent = 'ชื่อไฟล์ปลายทาง';
+      if (extSpan) extSpan.textContent = '.pdf';
+      if (btnText) btnText.textContent = 'แยก PDF';
+      if (filenameInput && !isCustom) {
+        filenameInput.value = 'selected-pages';
+      }
+    } else if (splitState.splitMode === 'ranges') {
+      if (title) title.textContent = 'แยกเป็นช่วง';
+      if (summaryLabel) summaryLabel.textContent = 'จำนวนช่วง:';
+      if (summaryVal) summaryVal.textContent = `${splitState.ranges.length} ช่วง`;
+
+      if (splitState.combineRanges) {
+        if (filenameLabel) filenameLabel.textContent = 'ชื่อไฟล์ปลายทาง';
+        if (extSpan) extSpan.textContent = '.pdf';
+        if (btnText) btnText.textContent = 'รวมและแยก PDF';
+        if (filenameInput && !isCustom) {
+          filenameInput.value = `${baseName}-combined-ranges`;
+        }
+      } else {
+        const isSingle = splitState.ranges.length === 1;
+        if (filenameLabel) filenameLabel.textContent = isSingle ? 'ชื่อไฟล์ปลายทาง' : 'ชื่อไฟล์ ZIP';
+        if (extSpan) extSpan.textContent = isSingle ? '.pdf' : '.zip';
+        if (btnText) btnText.textContent = isSingle ? 'แยก PDF' : 'แยกช่วงเป็น ZIP';
+        if (filenameInput && !isCustom) {
+          filenameInput.value = isSingle ? `range-${splitState.ranges[0].start}-${splitState.ranges[0].end}` : `${baseName}-ranges`;
+        }
+      }
+    }
+  }
+
+  function validateRange(range) {
+    const start = parseInt(range.start, 10);
+    const end = parseInt(range.end, 10);
+
+    if (isNaN(start) || isNaN(end)) {
+      return { valid: false, error: 'กรุณาระบุเลขหน้าที่ถูกต้อง' };
+    }
+    if (start < 1) {
+      return { valid: false, error: 'หน้าเริ่มต้นต้องไม่น้อยกว่า 1' };
+    }
+    if (end > splitState.totalPages) {
+      return { valid: false, error: `หน้าสิ้นสุดต้องไม่เกินจำนวนหน้าทั้งหมด (${splitState.totalPages})` };
+    }
+    if (start > end) {
+      return { valid: false, error: 'ช่วงหน้าไม่ถูกต้อง: หน้าเริ่มต้นต้องไม่มากกว่าหน้าสิ้นสุด' };
+    }
+    return { valid: true, error: '' };
+  }
+
+  function checkRangeOverlap() {
+    const warningEl = document.getElementById('splitOverlapWarning');
+    if (!warningEl) return false;
+
+    if (!splitState.combineRanges) {
+      warningEl.classList.add('hidden');
+      return false;
+    }
+
+    const pageCounts = new Map();
+    let hasOverlap = false;
+
+    for (const r of splitState.ranges) {
+      const v = validateRange(r);
+      if (!v.valid) continue;
+      for (let p = r.start; p <= r.end; p++) {
+        const count = (pageCounts.get(p) || 0) + 1;
+        pageCounts.set(p, count);
+        if (count > 1) {
+          hasOverlap = true;
+        }
+      }
+    }
+
+    if (hasOverlap) {
+      warningEl.classList.remove('hidden');
+    } else {
+      warningEl.classList.add('hidden');
+    }
+
+    return hasOverlap;
+  }
+
+  function renderRangeRows() {
+    const container = document.getElementById('splitRangeRows');
+    if (!container) return;
+
+    container.innerHTML = '';
+    const canDelete = splitState.ranges.length > 1;
+
+    splitState.ranges.forEach((range, idx) => {
+      const validation = validateRange(range);
+      const row = document.createElement('div');
+      row.className = 'range-row' + (validation.valid ? '' : ' has-error');
+      row.dataset.index = String(idx);
+
+      row.innerHTML = `
+        <div class="range-row-header">
+          <span class="range-row-num">ช่วงที่ ${idx + 1}</span>
+          ${canDelete ? `
+            <button type="button" class="btn btn-ghost btn-sm btn-range-remove" data-index="${idx}" aria-label="ลบช่วงที่ ${idx + 1}" title="ลบช่วงนี้">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>ลบ</span>
+            </button>
+          ` : ''}
+        </div>
+        <div class="range-inputs">
+          <div class="range-field">
+            <label class="range-label" for="rangeStart_${idx}">จากหน้า</label>
+            <input type="number" id="rangeStart_${idx}" class="input-text range-start-input" min="1" max="${splitState.totalPages}" value="${range.start}">
+          </div>
+          <span class="range-sep">ถึงหน้า</span>
+          <div class="range-field">
+            <label class="range-label sr-only" for="rangeEnd_${idx}">ถึงหน้า</label>
+            <input type="number" id="rangeEnd_${idx}" class="input-text range-end-input" min="1" max="${splitState.totalPages}" value="${range.end}">
+          </div>
+        </div>
+        <div class="range-row-error ${validation.valid ? 'hidden' : ''}" id="rangeError_${idx}" role="alert">
+          ${validation.error}
+        </div>
+      `;
+
+      const startInput = row.querySelector('.range-start-input');
+      const endInput = row.querySelector('.range-end-input');
+
+      const onInputChange = () => {
+        const sVal = parseInt(startInput.value, 10);
+        const eVal = parseInt(endInput.value, 10);
+        range.start = isNaN(sVal) ? 0 : sVal;
+        range.end = isNaN(eVal) ? 0 : eVal;
+
+        const val = validateRange(range);
+        const errEl = row.querySelector('.range-row-error');
+        if (val.valid) {
+          row.classList.remove('has-error');
+          if (errEl) {
+            errEl.textContent = '';
+            errEl.classList.add('hidden');
+          }
+        } else {
+          row.classList.add('has-error');
+          if (errEl) {
+            errEl.textContent = val.error;
+            errEl.classList.remove('hidden');
+          }
+        }
+        checkRangeOverlap();
+        updateSplitModeUI();
+      };
+
+      startInput?.addEventListener('input', onInputChange);
+      endInput?.addEventListener('input', onInputChange);
+
+      const btnRemove = row.querySelector('.btn-range-remove');
+      btnRemove?.addEventListener('click', () => {
+        removeRangeRow(idx);
+      });
+
+      container.appendChild(row);
+    });
+
+    checkRangeOverlap();
+    updateSplitModeUI();
+  }
+
+  function addRangeRow() {
+    let nextStart = 1;
+    if (splitState.ranges.length > 0) {
+      const last = splitState.ranges[splitState.ranges.length - 1];
+      nextStart = Math.min(splitState.totalPages, (parseInt(last.end, 10) || 1) + 1);
+    }
+    const nextEnd = Math.min(splitState.totalPages, nextStart);
+    splitState.ranges.push({ start: nextStart, end: nextEnd });
+    renderRangeRows();
+  }
+
+  function removeRangeRow(index) {
+    if (splitState.ranges.length <= 1) return;
+    splitState.ranges.splice(index, 1);
+    renderRangeRows();
   }
 
   async function handleSplitFile(file) {
@@ -539,6 +977,18 @@
       splitState.buffer = loaded.buffer;
       splitState.totalPages = loaded.pageCount;
       splitState.selectedPages.clear();
+      splitState.splitMode = 'select'; // Preserve backward compatibility by default
+      splitState.ranges = [{ start: 1, end: Math.min(loaded.pageCount, 1) }];
+      splitState.combineRanges = false;
+
+      const combineCb = document.getElementById('splitCombineRanges');
+      if (combineCb) combineCb.checked = false;
+
+      const filenameInput = document.getElementById('splitOutputFilename');
+      if (filenameInput) {
+        delete filenameInput.dataset.autoName;
+        filenameInput.value = 'selected-pages';
+      }
 
       for (let i = 1; i <= loaded.pageCount; i++) {
         splitState.selectedPages.add(i);
@@ -546,6 +996,7 @@
 
       hideProgressModal();
       await renderSplitUI();
+      setSplitMode('select');
       showToast(`โหลด PDF สำเร็จ (${loaded.pageCount} หน้า)`, 'success');
     } catch (err) {
       hideProgressModal();
@@ -581,21 +1032,23 @@
       grid.innerHTML = '';
       for (let i = 1; i <= splitState.totalPages; i++) {
         const card = document.createElement('div');
-        card.className = 'thumb-card page-card-selectable' + (splitState.selectedPages.has(i) ? ' selected' : '');
+        card.className = 'thumb-card page-card-selectable split-page-card' + (splitState.selectedPages.has(i) ? ' selected' : '');
         card.dataset.page = String(i);
         card.setAttribute('role', 'checkbox');
         card.setAttribute('aria-checked', String(splitState.selectedPages.has(i)));
         card.setAttribute('tabindex', '0');
 
         card.innerHTML = `
-          <div class="card-header">
-            <span class="page-badge">หน้า ${i}</span>
-            <div class="page-select-checkbox">
+          <div class="split-card-header">
+            <div class="page-select-checkbox" aria-label="เลือกหน้า ${i}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
           </div>
-          <div class="card-preview-area">
+          <div class="card-preview-area split-preview-area">
             <div class="page-loading-skeleton">กำลังโหลด...</div>
+          </div>
+          <div class="split-card-footer">
+            <span class="page-badge">หน้า ${i}</span>
           </div>
         `;
 
@@ -633,7 +1086,7 @@
 
   function updateSplitSelections() {
     const summarySelected = document.getElementById('splitSummarySelected');
-    if (summarySelected) {
+    if (summarySelected && splitState.splitMode === 'select') {
       summarySelected.textContent = `เลือกแล้ว ${splitState.selectedPages.size} จาก ${splitState.totalPages} หน้า`;
     }
 
@@ -647,6 +1100,187 @@
   }
 
   async function executeSplit() {
+    if (!splitState.file) {
+      showToast('กรุณาเลือกไฟล์ PDF ก่อนดำเนินการ', 'error');
+      return;
+    }
+
+    if (splitState.splitMode === 'all-pages') {
+      await executeSplitAllPages();
+    } else if (splitState.splitMode === 'ranges') {
+      await executeSplitRanges();
+    } else {
+      await executeSplitSelect();
+    }
+  }
+
+  async function executeSplitAllPages() {
+    if (!splitState.file || splitState.totalPages < 1) {
+      showToast('ไม่พบหน้าในเอกสาร PDF', 'error');
+      return;
+    }
+
+    if (!window.JSZip) {
+      showToast('ไลบรารี JSZip ไม่พร้อมใช้งาน', 'error');
+      return;
+    }
+
+    const baseName = splitState.file.name.replace(/\.[^/.]+$/, '');
+    const filenameInput = document.getElementById('splitOutputFilename');
+    let rawName = (filenameInput?.value || `${baseName}-split-pages`).trim();
+    if (rawName.toLowerCase().endsWith('.zip')) rawName = rawName.slice(0, -4);
+    const zipFilename = `${rawName || `${baseName}-split-pages`}.zip`;
+
+    showProgressModal();
+    const total = splitState.totalPages;
+    updateProgress(0, total, 'กำลังเตรียมแยกหน้าเอกสาร...');
+
+    try {
+      const zip = new window.JSZip();
+      const srcDoc = await window.PDFLib.PDFDocument.load(splitState.buffer);
+
+      for (let i = 1; i <= total; i++) {
+        updateProgress(i, total, `กำลังสร้างไฟล์หน้า ${i} จาก ${total}...`);
+        const pageDoc = await window.PDFLib.PDFDocument.create();
+        const [copiedPage] = await pageDoc.copyPages(srcDoc, [i - 1]);
+        pageDoc.addPage(copiedPage);
+        const pdfBytes = await pageDoc.save();
+        zip.file(`page-${i}.pdf`, pdfBytes);
+        await new Promise(r => setTimeout(r, 0));
+      }
+
+      updateProgress(total, total, 'กำลังรวมไฟล์เป็น ZIP...');
+      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+      downloadBlob(zipBlob, zipFilename);
+      hideProgressModal();
+      showToast(`แยกทุกหน้าเป็นไฟล์สำเร็จ (${total} ไฟล์) กำลังดาวน์โหลด ZIP...`, 'success');
+    } catch (err) {
+      console.warn('Split all-pages execution error:', err);
+      hideProgressModal();
+      showToast('เกิดข้อผิดพลาดในการแยก PDF: ' + err.message, 'error');
+    }
+  }
+
+  async function executeSplitRanges() {
+    if (!splitState.file || splitState.ranges.length === 0) {
+      showToast('กรุณาระบุช่วงหน้าที่ต้องการแยกอย่างน้อย 1 ช่วง', 'error');
+      return;
+    }
+
+    // Validate all ranges first
+    for (let i = 0; i < splitState.ranges.length; i++) {
+      const v = validateRange(splitState.ranges[i]);
+      if (!v.valid) {
+        showToast(v.error, 'error');
+        const input = document.getElementById(`rangeStart_${i}`);
+        input?.focus();
+        return;
+      }
+    }
+
+    const baseName = splitState.file.name.replace(/\.[^/.]+$/, '');
+    const filenameInput = document.getElementById('splitOutputFilename');
+
+    showProgressModal();
+    updateProgress(0, 1, 'กำลังเตรียมแยกหน้าตามช่วง...');
+
+    try {
+      const srcDoc = await window.PDFLib.PDFDocument.load(splitState.buffer);
+
+      if (splitState.combineRanges) {
+        // Combined mode: Deduplicate overlapping pages in sequence
+        let rawName = (filenameInput?.value || `${baseName}-combined-ranges`).trim();
+        if (rawName.toLowerCase().endsWith('.pdf')) rawName = rawName.slice(0, -4);
+        const outPdfName = `${rawName || `${baseName}-combined-ranges`}.pdf`;
+
+        const seenPages = new Set();
+        const orderedPages = [];
+        for (const r of splitState.ranges) {
+          for (let p = r.start; p <= r.end; p++) {
+            if (!seenPages.has(p)) {
+              seenPages.add(p);
+              orderedPages.push(p);
+            }
+          }
+        }
+
+        updateProgress(1, 2, `กำลังรวม ${orderedPages.length} หน้าในไฟล์เดียว...`);
+        const combinedDoc = await window.PDFLib.PDFDocument.create();
+        const indices = orderedPages.map(p => p - 1);
+        const copiedPages = await combinedDoc.copyPages(srcDoc, indices);
+        copiedPages.forEach(p => combinedDoc.addPage(p));
+
+        const pdfBytes = await combinedDoc.save();
+        downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), outPdfName);
+        hideProgressModal();
+        showToast(`แยกและรวมช่วงสำเร็จ (${copiedPages.length} หน้า) กำลังดาวน์โหลด...`, 'success');
+      } else {
+        // Separate files mode: Overlaps ARE preserved
+        const isSingle = splitState.ranges.length === 1;
+
+        if (isSingle) {
+          const r = splitState.ranges[0];
+          let rawName = (filenameInput?.value || `range-${r.start}-${r.end}`).trim();
+          if (rawName.toLowerCase().endsWith('.pdf')) rawName = rawName.slice(0, -4);
+          const outPdfName = `${rawName || `range-${r.start}-${r.end}`}.pdf`;
+
+          updateProgress(1, 1, 'กำลังสร้างไฟล์ PDF...');
+          const rangeDoc = await window.PDFLib.PDFDocument.create();
+          const indices = [];
+          for (let p = r.start; p <= r.end; p++) indices.push(p - 1);
+          const copiedPages = await rangeDoc.copyPages(srcDoc, indices);
+          copiedPages.forEach(p => rangeDoc.addPage(p));
+
+          const pdfBytes = await rangeDoc.save();
+          downloadBlob(new Blob([pdfBytes], { type: 'application/pdf' }), outPdfName);
+          hideProgressModal();
+          showToast(`แยกช่วง PDF สำเร็จ (${copiedPages.length} หน้า) กำลังดาวน์โหลด...`, 'success');
+        } else {
+          // Multiple ranges -> Bundle into ZIP
+          if (!window.JSZip) {
+            showToast('ไลบรารี JSZip ไม่พร้อมใช้งาน', 'error');
+            hideProgressModal();
+            return;
+          }
+
+          let rawName = (filenameInput?.value || `${baseName}-ranges`).trim();
+          if (rawName.toLowerCase().endsWith('.zip')) rawName = rawName.slice(0, -4);
+          const zipName = `${rawName || `${baseName}-ranges`}.zip`;
+
+          const zip = new window.JSZip();
+          const totalRanges = splitState.ranges.length;
+
+          for (let idx = 0; idx < totalRanges; idx++) {
+            const r = splitState.ranges[idx];
+            updateProgress(idx + 1, totalRanges, `กำลังสร้างช่วงที่ ${idx + 1} (หน้า ${r.start}-${r.end})...`);
+            const rangeDoc = await window.PDFLib.PDFDocument.create();
+            const indices = [];
+            for (let p = r.start; p <= r.end; p++) indices.push(p - 1);
+            const copiedPages = await rangeDoc.copyPages(srcDoc, indices);
+            copiedPages.forEach(p => rangeDoc.addPage(p));
+
+            const pdfBytes = await rangeDoc.save();
+            const countIdenticalBefore = splitState.ranges.filter((x, i) => i < idx && x.start === r.start && x.end === r.end).length;
+            const itemFname = `range-${r.start}-${r.end}${countIdenticalBefore ? `-${countIdenticalBefore + 1}` : ''}.pdf`;
+            zip.file(itemFname, pdfBytes);
+            await new Promise(res => setTimeout(res, 0));
+          }
+
+          updateProgress(totalRanges, totalRanges, 'กำลังรวมช่วงทั้งหมดเป็น ZIP...');
+          const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+          downloadBlob(zipBlob, zipName);
+          hideProgressModal();
+          showToast(`แยกช่วง PDF สำเร็จ (${totalRanges} ไฟล์) กำลังดาวน์โหลด ZIP...`, 'success');
+        }
+      }
+    } catch (err) {
+      console.warn('Split ranges execution error:', err);
+      hideProgressModal();
+      showToast('เกิดข้อผิดพลาดในการแยกช่วง PDF: ' + err.message, 'error');
+    }
+  }
+
+  async function executeSplitSelect() {
     if (!splitState.file || splitState.selectedPages.size === 0) {
       showToast('กรุณาเลือกหน้าที่ต้องการแยกอย่างน้อย 1 หน้า', 'error');
       return;
@@ -831,8 +1465,10 @@
 
       card.innerHTML = `
         <div class="card-top-bar">
-          <span class="page-badge">#${idx + 1}</span>
-          <span class="card-orig-tag">หน้าเดิม ${pageItem.originalIndex + 1}</span>
+          <div class="card-top-bar-left">
+            <span class="page-badge">#${idx + 1}</span>
+            <span class="card-orig-tag">หน้าเดิม ${pageItem.originalIndex + 1}</span>
+          </div>
           <div class="card-quick-actions">
             <button type="button" class="card-action-btn btn-rotate-page" title="หมุนหน้า 90°" aria-label="หมุน">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -4283,7 +4919,16 @@
     cancelOcr,
     buildSearchablePdf,
     downloadSearchablePdf,
-    preprocessImageForOcr
+    preprocessImageForOcr,
+    setMergeViewMode,
+    renderMergeUI,
+    renderOrganizeCards,
+    setSplitMode,
+    addRangeRow,
+    removeRangeRow,
+    renderRangeRows,
+    validateRange,
+    checkRangeOverlap
   };
 
   if (document.readyState === 'loading') {
