@@ -800,6 +800,11 @@
             <div class="thumbnail-grid split-grid-view" id="splitThumbnailGrid">
               <!-- Rendered page cards with visual mode indicators -->
             </div>
+
+            <!-- Mode 3 Range Groups Preview Workspace -->
+            <div class="split-ranges-workspace hidden" id="splitRangesPreview">
+              <!-- Dynamically rendered range preview groups -->
+            </div>
           </div>
 
           <aside class="workspace-right">
@@ -864,10 +869,18 @@
               <div class="split-mode-panel hidden" id="splitPanelRanges">
                 <div class="summary-card-box">
                   <div class="summary-row">
+                    <span>จำนวนหน้าในไฟล์:</span>
+                    <strong id="splitRangesFilePages">0 หน้า</strong>
+                  </div>
+                  <div class="summary-row">
                     <span>จำนวนช่วง:</span>
                     <strong id="splitRangesCount">1 ช่วง</strong>
                   </div>
                   <div class="summary-row">
+                    <span>รวมทั้งหมด:</span>
+                    <strong id="splitRangesTotalPages">0 หน้า</strong>
+                  </div>
+                  <div class="summary-row hidden" id="splitOriginalName3Row">
                     <span>ชื่อไฟล์ต้นฉบับ:</span>
                     <span id="splitOriginalName3" class="text-truncate">-</span>
                   </div>

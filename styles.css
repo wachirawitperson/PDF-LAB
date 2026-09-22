@@ -3305,6 +3305,19 @@ select option {
   box-shadow: 0 0 0 2px var(--accent-amber-glow);
 }
 
+.range-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: -2px;
+}
+
+.range-page-count-badge {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .range-row-error {
   font-size: 12px;
   color: #ef4444;
@@ -3316,6 +3329,103 @@ select option {
 
 [data-theme="light"] .range-row-error {
   color: #dc2626;
+}
+
+/* Range Groups in Left Workspace Preview */
+.split-ranges-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 40px;
+}
+
+.split-range-group {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.split-range-group:hover {
+  border-color: var(--border-focus);
+}
+
+.split-range-group.has-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.split-range-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.split-range-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-group-badge {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: var(--accent-amber);
+  color: #0b0d10;
+  letter-spacing: 0.02em;
+}
+
+[data-theme="light"] .range-group-badge {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
+.range-group-pages {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.range-group-count {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.split-range-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+}
+
+.split-range-group-grid .split-page-card {
+  cursor: default;
+}
+
+.split-range-group-grid .split-preview-area {
+  aspect-ratio: 3 / 4;
+}
+
+.split-range-group-error-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  color: #ef4444;
+  font-size: 13.5px;
+  font-weight: 500;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
 }
 
 .range-builder-footer {

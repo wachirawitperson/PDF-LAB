@@ -670,6 +670,7 @@
     });
 
     btnClear?.addEventListener('click', () => {
+      splitThumbnailCache.clear();
       splitState.file = null;
       splitState.buffer = null;
       splitState.totalPages = 0;
@@ -715,6 +716,7 @@
       splitState.combineRanges = e.target.checked;
       checkRangeOverlap();
       updateSplitModeUI();
+      if (splitState.splitMode === 'ranges') renderRangesPreview();
     });
 
     filenameInput?.addEventListener('input', () => {
@@ -722,6 +724,18 @@
     });
 
     btnExecute?.addEventListener('click', executeSplit);
+  }
+
+  const splitThumbnailCache = new Map();
+
+  function getCachedThumbnail(pageNum) {
+    if (splitThumbnailCache.has(pageNum)) {
+      return Promise.resolve(splitThumbnailCache.get(pageNum));
+    }
+    return renderPdfThumbnail(splitState.buffer, pageNum, 0.35).then(dataUrl => {
+      splitThumbnailCache.set(pageNum, dataUrl);
+      return dataUrl;
+    });
   }
 
   function setSplitMode(mode) {
@@ -752,7 +766,7 @@
       } else if (mode === 'select') {
         workspaceHint.textContent = 'คลิกที่หน้าเพื่อเลือกหรือยกเลิกการเลือก';
       } else if (mode === 'ranges') {
-        workspaceHint.textContent = 'แสดงตัวอย่างหน้าที่ถูกรวมตามช่วงที่กำหนด';
+        workspaceHint.textContent = 'แสดงตัวอย่างหน้าตามช่วงที่กำหนดในแถบด้านขวา';
       }
     }
 
@@ -764,8 +778,17 @@
     if (panelSelect) panelSelect.classList.toggle('hidden', mode !== 'select');
     if (panelRanges) panelRanges.classList.toggle('hidden', mode !== 'ranges');
 
+    const grid = document.getElementById('splitThumbnailGrid');
+    const rangesPreview = document.getElementById('splitRangesPreview');
+
     if (mode === 'ranges') {
+      if (grid) grid.classList.add('hidden');
+      if (rangesPreview) rangesPreview.classList.remove('hidden');
       renderRangeRows();
+      renderRangesPreview();
+    } else {
+      if (grid) grid.classList.remove('hidden');
+      if (rangesPreview) rangesPreview.classList.add('hidden');
     }
 
     updateSplitModeUI();
@@ -782,14 +805,19 @@
     const btnText = document.getElementById('btnExecuteSplitText');
     const allPagesTotal = document.getElementById('splitAllPagesTotal');
     const rangesCount = document.getElementById('splitRangesCount');
+    const rangesFilePages = document.getElementById('splitRangesFilePages');
+    const rangesTotalPages = document.getElementById('splitRangesTotalPages');
+    const btnExecute = document.getElementById('btnExecuteSplit');
 
     if (allPagesTotal) allPagesTotal.textContent = `${splitState.totalPages} หน้า`;
+    if (rangesFilePages) rangesFilePages.textContent = `${splitState.totalPages} หน้า`;
     if (rangesCount) rangesCount.textContent = `${splitState.ranges.length} ช่วง`;
 
     const baseName = splitState.file ? splitState.file.name.replace(/\.[^/.]+$/, '') : 'document';
     const isCustom = filenameInput?.dataset.autoName === 'custom';
 
     if (splitState.splitMode === 'all-pages') {
+      if (btnExecute) btnExecute.disabled = false;
       if (title) title.textContent = 'แยกทุกหน้าเป็นไฟล์';
       if (summaryLabel) summaryLabel.textContent = 'จำนวนหน้าทั้งหมด:';
       if (summaryVal) summaryVal.textContent = `${splitState.totalPages} หน้า (${splitState.totalPages} ไฟล์)`;
@@ -800,6 +828,7 @@
         filenameInput.value = `${baseName}-split-pages`;
       }
     } else if (splitState.splitMode === 'select') {
+      if (btnExecute) btnExecute.disabled = splitState.selectedPages.size === 0;
       if (title) title.textContent = 'แยกหน้าที่เลือก';
       if (summaryLabel) summaryLabel.textContent = 'หน้าที่เลือก:';
       if (summaryVal) summaryVal.textContent = `เลือกแล้ว ${splitState.selectedPages.size} จาก ${splitState.totalPages} หน้า`;
@@ -811,24 +840,53 @@
       }
     } else if (splitState.splitMode === 'ranges') {
       if (title) title.textContent = 'แยกเป็นช่วง';
-      if (summaryLabel) summaryLabel.textContent = 'จำนวนช่วง:';
-      if (summaryVal) summaryVal.textContent = `${splitState.ranges.length} ช่วง`;
+
+      // Calculate total included pages
+      let totalPagesIncluded = 0;
+      if (splitState.combineRanges) {
+        const uniquePages = new Set();
+        splitState.ranges.forEach(r => {
+          const v = validateRange(r);
+          if (v.valid) {
+            for (let p = r.start; p <= r.end; p++) uniquePages.add(p);
+          }
+        });
+        totalPagesIncluded = uniquePages.size;
+      } else {
+        splitState.ranges.forEach(r => {
+          const v = validateRange(r);
+          if (v.valid) totalPagesIncluded += (r.end - r.start + 1);
+        });
+      }
+      if (rangesTotalPages) rangesTotalPages.textContent = `${totalPagesIncluded} หน้า`;
+
+      const validRanges = splitState.ranges.filter(r => validateRange(r).valid);
+      const rangeSlug = validRanges.length > 0
+        ? validRanges.map(r => `${r.start}-${r.end}`).join('-')
+        : '';
+      const defaultRangeName = rangeSlug ? `range-${rangeSlug}` : `${baseName}-ranges`;
 
       if (splitState.combineRanges) {
         if (filenameLabel) filenameLabel.textContent = 'ชื่อไฟล์ปลายทาง';
         if (extSpan) extSpan.textContent = '.pdf';
-        if (btnText) btnText.textContent = 'รวมและแยก PDF';
+        if (btnText) btnText.textContent = 'แยก PDF';
         if (filenameInput && !isCustom) {
-          filenameInput.value = `${baseName}-combined-ranges`;
+          filenameInput.value = defaultRangeName;
         }
       } else {
         const isSingle = splitState.ranges.length === 1;
         if (filenameLabel) filenameLabel.textContent = isSingle ? 'ชื่อไฟล์ปลายทาง' : 'ชื่อไฟล์ ZIP';
         if (extSpan) extSpan.textContent = isSingle ? '.pdf' : '.zip';
-        if (btnText) btnText.textContent = isSingle ? 'แยก PDF' : 'แยกช่วงเป็น ZIP';
+        if (btnText) btnText.textContent = 'แยก PDF';
         if (filenameInput && !isCustom) {
-          filenameInput.value = isSingle ? `range-${splitState.ranges[0].start}-${splitState.ranges[0].end}` : `${baseName}-ranges`;
+          filenameInput.value = defaultRangeName;
         }
+      }
+
+      // Disabled if any range is invalid
+      const anyInvalid = splitState.ranges.length === 0 || splitState.ranges.some(r => !validateRange(r).valid);
+      if (btnExecute) {
+        btnExecute.disabled = anyInvalid;
       }
     }
   }
@@ -843,23 +901,24 @@
     if (start < 1) {
       return { valid: false, error: 'หน้าเริ่มต้นต้องไม่น้อยกว่า 1' };
     }
+    if (end < 1) {
+      return { valid: false, error: 'หน้าสิ้นสุดต้องไม่น้อยกว่า 1' };
+    }
+    if (start > splitState.totalPages) {
+      return { valid: false, error: `หน้า ${start} ไม่มีอยู่ในไฟล์นี้` };
+    }
     if (end > splitState.totalPages) {
-      return { valid: false, error: `หน้าสิ้นสุดต้องไม่เกินจำนวนหน้าทั้งหมด (${splitState.totalPages})` };
+      return { valid: false, error: `หน้า ${end} ไม่มีอยู่ในไฟล์นี้` };
     }
     if (start > end) {
-      return { valid: false, error: 'ช่วงหน้าไม่ถูกต้อง: หน้าเริ่มต้นต้องไม่มากกว่าหน้าสิ้นสุด' };
+      return { valid: false, error: 'หน้าสิ้นสุดต้องมากกว่าหรือเท่ากับหน้าเริ่มต้น' };
     }
-    return { valid: true, error: '' };
+    return { valid: true, error: '', count: end - start + 1 };
   }
 
   function checkRangeOverlap() {
     const warningEl = document.getElementById('splitOverlapWarning');
     if (!warningEl) return false;
-
-    if (!splitState.combineRanges) {
-      warningEl.classList.add('hidden');
-      return false;
-    }
 
     const pageCounts = new Map();
     let hasOverlap = false;
@@ -878,6 +937,14 @@
 
     if (hasOverlap) {
       warningEl.classList.remove('hidden');
+      const textSpan = warningEl.querySelector('span');
+      if (textSpan) {
+        if (splitState.combineRanges) {
+          textSpan.textContent = '⚠️ มีช่วงที่ซ้อนกัน ระบบจะไม่เพิ่มหน้าซ้ำในไฟล์ผลลัพธ์ (รวมแบบ Deduplicate)';
+        } else {
+          textSpan.textContent = 'ℹ️ มีช่วงที่ซ้อนกัน แต่ละไฟล์จะคงหน้าที่ระบุไว้ตามช่วง';
+        }
+      }
     } else {
       warningEl.classList.add('hidden');
     }
@@ -919,6 +986,11 @@
             <input type="number" id="rangeEnd_${idx}" class="input-text range-end-input" min="1" max="${splitState.totalPages}" value="${range.end}">
           </div>
         </div>
+        <div class="range-row-meta">
+          <span class="range-page-count-badge">
+            ${validation.valid ? `จำนวน ${range.end - range.start + 1} หน้า` : ''}
+          </span>
+        </div>
         <div class="range-row-error ${validation.valid ? 'hidden' : ''}" id="rangeError_${idx}" role="alert">
           ${validation.error}
         </div>
@@ -935,11 +1007,15 @@
 
         const val = validateRange(range);
         const errEl = row.querySelector('.range-row-error');
+        const countBadge = row.querySelector('.range-page-count-badge');
         if (val.valid) {
           row.classList.remove('has-error');
           if (errEl) {
             errEl.textContent = '';
             errEl.classList.add('hidden');
+          }
+          if (countBadge) {
+            countBadge.textContent = `จำนวน ${range.end - range.start + 1} หน้า`;
           }
         } else {
           row.classList.add('has-error');
@@ -947,10 +1023,13 @@
             errEl.textContent = val.error;
             errEl.classList.remove('hidden');
           }
+          if (countBadge) {
+            countBadge.textContent = '';
+          }
         }
         checkRangeOverlap();
         updateSplitModeUI();
-        updateSplitGridHighlights();
+        renderRangesPreview();
       };
 
       startInput?.addEventListener('input', onInputChange);
@@ -966,24 +1045,105 @@
 
     checkRangeOverlap();
     updateSplitModeUI();
-    updateSplitGridHighlights();
   }
 
   function addRangeRow() {
     let nextStart = 1;
     if (splitState.ranges.length > 0) {
       const last = splitState.ranges[splitState.ranges.length - 1];
-      nextStart = Math.min(splitState.totalPages, (parseInt(last.end, 10) || 1) + 1);
+      const lastEnd = parseInt(last.end, 10) || 1;
+      if (lastEnd < splitState.totalPages) {
+        nextStart = lastEnd + 1;
+      } else {
+        nextStart = 1;
+      }
     }
     const nextEnd = Math.min(splitState.totalPages, nextStart);
     splitState.ranges.push({ start: nextStart, end: nextEnd });
     renderRangeRows();
+    renderRangesPreview();
+    updateSplitModeUI();
   }
 
   function removeRangeRow(index) {
     if (splitState.ranges.length <= 1) return;
     splitState.ranges.splice(index, 1);
     renderRangeRows();
+    renderRangesPreview();
+    updateSplitModeUI();
+  }
+
+  function renderRangesPreview() {
+    const container = document.getElementById('splitRangesPreview');
+    if (!container) return;
+
+    if (!splitState.file || splitState.totalPages < 1) {
+      container.innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = '';
+
+    splitState.ranges.forEach((range, idx) => {
+      const v = validateRange(range);
+      const groupEl = document.createElement('div');
+      groupEl.className = 'split-range-group' + (v.valid ? '' : ' has-error');
+      groupEl.dataset.rangeIndex = String(idx);
+
+      const headerEl = document.createElement('div');
+      headerEl.className = 'split-range-group-header';
+      headerEl.innerHTML = `
+        <div class="split-range-group-title">
+          <span class="range-group-badge">ช่วงที่ ${idx + 1}</span>
+          ${v.valid ? `<span class="range-group-pages">(หน้า ${range.start}${range.start === range.end ? '' : `–${range.end}`})</span>` : ''}
+        </div>
+        <span class="range-group-count">${v.valid ? `จำนวน ${range.end - range.start + 1} หน้า` : 'ระบุช่วงไม่ถูกต้อง'}</span>
+      `;
+      groupEl.appendChild(headerEl);
+
+      if (!v.valid) {
+        const errorBox = document.createElement('div');
+        errorBox.className = 'split-range-group-error-box';
+        errorBox.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>${v.error}</span>
+        `;
+        groupEl.appendChild(errorBox);
+      } else {
+        const gridEl = document.createElement('div');
+        gridEl.className = 'thumbnail-grid split-range-group-grid';
+
+        for (let p = range.start; p <= range.end; p++) {
+          const card = document.createElement('div');
+          card.className = 'thumb-card split-page-card';
+          card.dataset.page = String(p);
+
+          card.innerHTML = `
+            <div class="card-preview-area split-preview-area">
+              <div class="page-loading-skeleton">กำลังโหลด...</div>
+            </div>
+            <div class="split-card-footer">
+              <span class="page-badge">หน้า ${p}</span>
+            </div>
+          `;
+
+          gridEl.appendChild(card);
+
+          getCachedThumbnail(p).then(dataUrl => {
+            const previewArea = card.querySelector('.card-preview-area');
+            if (previewArea) {
+              previewArea.innerHTML = `<img src="${dataUrl}" alt="หน้า ${p}" class="card-preview-img">`;
+            }
+          }).catch(() => {
+            const previewArea = card.querySelector('.card-preview-area');
+            if (previewArea) previewArea.innerHTML = `<span class="preview-err">หน้า ${p}</span>`;
+          });
+        }
+        groupEl.appendChild(gridEl);
+      }
+
+      container.appendChild(groupEl);
+    });
   }
 
   async function handleSplitFile(file) {
@@ -1105,6 +1265,7 @@
         grid.appendChild(card);
 
         renderPdfThumbnail(splitState.buffer, i, 0.35).then(dataUrl => {
+          splitThumbnailCache.set(i, dataUrl);
           const previewArea = card.querySelector('.card-preview-area');
           if (previewArea) {
             previewArea.innerHTML = `<img src="${dataUrl}" alt="หน้า ${i}" class="card-preview-img">`;
@@ -1273,11 +1434,17 @@
     try {
       const srcDoc = await window.PDFLib.PDFDocument.load(splitState.buffer);
 
+      const validRanges = splitState.ranges.filter(r => validateRange(r).valid);
+      const rangeSlug = validRanges.length > 0
+        ? validRanges.map(r => `${r.start}-${r.end}`).join('-')
+        : '';
+      const defaultRangeName = rangeSlug ? `range-${rangeSlug}` : `${baseName}-ranges`;
+
       if (splitState.combineRanges) {
         // Combined mode: Deduplicate overlapping pages in sequence
-        let rawName = (filenameInput?.value || `${baseName}-combined-ranges`).trim();
+        let rawName = (filenameInput?.value || defaultRangeName).trim();
         if (rawName.toLowerCase().endsWith('.pdf')) rawName = rawName.slice(0, -4);
-        const outPdfName = `${rawName || `${baseName}-combined-ranges`}.pdf`;
+        const outPdfName = `${rawName || defaultRangeName}.pdf`;
 
         const seenPages = new Set();
         const orderedPages = [];
@@ -1329,9 +1496,9 @@
             return;
           }
 
-          let rawName = (filenameInput?.value || `${baseName}-ranges`).trim();
+          let rawName = (filenameInput?.value || defaultRangeName).trim();
           if (rawName.toLowerCase().endsWith('.zip')) rawName = rawName.slice(0, -4);
-          const zipName = `${rawName || `${baseName}-ranges`}.zip`;
+          const zipName = `${rawName || defaultRangeName}.zip`;
 
           const zip = new window.JSZip();
           const totalRanges = splitState.ranges.length;
