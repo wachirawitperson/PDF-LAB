@@ -774,22 +774,11 @@
             <div class="workspace-toolbar" id="splitWorkspaceToolbar">
               <div class="toolbar-left">
                 <span class="file-count-badge" id="splitFileBadge">0 หน้า</span>
-                <div class="segmented-control" role="group" aria-label="รูปแบบการแยก PDF">
-                  <button type="button" class="segmented-btn" id="btnSplitModeAllPages" aria-pressed="false">แยกทุกหน้าเป็นไฟล์</button>
-                  <button type="button" class="segmented-btn active" id="btnSplitModeSelect" aria-pressed="true">เลือกหน้า</button>
-                  <button type="button" class="segmented-btn" id="btnSplitModeRanges" aria-pressed="false">แยกเป็นช่วง</button>
-                </div>
+                <span class="split-workspace-hint" id="splitWorkspaceHint">คลิกที่หน้าเพื่อเลือกหรือยกเลิกการเลือก</span>
               </div>
               <div class="toolbar-right">
-                <div class="split-select-toolbar" id="splitSelectToolbar">
-                  <button type="button" class="btn btn-secondary btn-sm" id="btnSplitSelectAll">เลือกทั้งหมด</button>
-                  <button type="button" class="btn btn-ghost btn-sm" id="btnSplitDeselectAll">ยกเลิกทั้งหมด</button>
-                  <div class="range-input-wrap">
-                    <input type="text" id="splitRangeInput" class="input-text input-sm" placeholder="ระบุช่วงหน้า เช่น 1-3, 5">
-                    <button type="button" class="btn btn-secondary btn-sm" id="btnSplitApplyRange">นำไปใช้</button>
-                  </div>
-                </div>
                 <button type="button" class="btn btn-ghost btn-sm text-danger" id="btnClearSplitPdf" title="เปลี่ยนไฟล์">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                   <span>เปลี่ยนไฟล์</span>
                 </button>
               </div>
@@ -801,57 +790,119 @@
               <span>โหมดแยกทุกหน้า: แต่ละหน้าจะถูกแยกเป็น 1 ไฟล์ PDF (รวมเป็นไฟล์ ZIP เพื่อความสะดวกในการดาวน์โหลด)</span>
             </div>
 
-            <!-- Mode 1 & 2 Thumbnail Grid -->
-            <div class="thumbnail-grid" id="splitThumbnailGrid">
-              <!-- Rendered page cards with selection checkmarks -->
+            <!-- Mode 3 Info Banner (Ranges) -->
+            <div class="split-info-banner hidden" id="splitRangesBanner">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+              <span>โหมดแยกเป็นช่วง: หน้าที่ถูกเลือกตามช่วงจะถูกไฮไลต์และมีป้ายกำกับช่วงอย่างชัดเจน</span>
             </div>
 
-            <!-- Mode 3 Range Builder Panel -->
-            <div class="split-ranges-panel hidden" id="splitPanelRanges">
-              <div class="range-builder-header">
-                <div>
-                  <h4 class="range-builder-title">กำหนดช่วงหน้าที่ต้องการแยก</h4>
-                  <p class="range-builder-desc">ระบุหน้าเริ่มต้นและหน้าสิ้นสุดของแต่ละช่วงที่ต้องการแยก</p>
-                </div>
-                <button type="button" class="btn btn-secondary btn-sm" id="btnAddSplitRange">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  <span>+ เพิ่มช่วง</span>
-                </button>
-              </div>
-
-              <div class="range-rows-container" id="splitRangeRows">
-                <!-- Dynamically generated range rows -->
-              </div>
-
-              <div class="range-builder-footer">
-                <div class="range-combine-option">
-                  <label class="checkbox-label" for="splitCombineRanges">
-                    <input type="checkbox" id="splitCombineRanges">
-                    <span>รวมช่วงทั้งหมดไว้ใน PDF ไฟล์เดียว</span>
-                  </label>
-                </div>
-                <div class="range-overlap-warning hidden" id="splitOverlapWarning" role="alert">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  <span>⚠️ มีช่วงที่ซ้อนกัน ระบบจะไม่เพิ่มหน้าซ้ำในไฟล์ผลลัพธ์</span>
-                </div>
-              </div>
+            <!-- Workspace Thumbnail Grid (Always visible across all modes) -->
+            <div class="thumbnail-grid split-grid-view" id="splitThumbnailGrid">
+              <!-- Rendered page cards with visual mode indicators -->
             </div>
           </div>
 
           <aside class="workspace-right">
             <div class="settings-card">
-              <h3 class="settings-title" id="splitSettingsTitle">แยกหน้าที่เลือก</h3>
-              <div class="summary-card-box">
-                <div class="summary-row">
-                  <span id="splitSummaryLabel">หน้าที่เลือก:</span>
-                  <strong id="splitSummarySelected">0 จาก 0 หน้า</strong>
-                </div>
-                <div class="summary-row">
-                  <span>ชื่อไฟล์ต้นฉบับ:</span>
-                  <span id="splitOriginalName" class="text-truncate">-</span>
+              <div class="split-sidebar-header">
+                <h3 class="settings-title" id="splitSettingsTitle">แยกหน้าที่เลือก</h3>
+                <!-- Mode Switcher in Sidebar -->
+                <div class="segmented-control split-sidebar-modes" role="group" aria-label="โหมดการแยก PDF">
+                  <button type="button" class="segmented-btn" id="btnSplitModeAllPages" aria-pressed="false">แยกทุกหน้า</button>
+                  <button type="button" class="segmented-btn active" id="btnSplitModeSelect" aria-pressed="true">เลือกหน้า</button>
+                  <button type="button" class="segmented-btn" id="btnSplitModeRanges" aria-pressed="false">แยกเป็นช่วง</button>
                 </div>
               </div>
 
+              <!-- Mode 1: All Pages Panel -->
+              <div class="split-mode-panel hidden" id="splitPanelAllPages">
+                <div class="summary-card-box">
+                  <div class="summary-row">
+                    <span>จำนวนหน้าทั้งหมด:</span>
+                    <strong id="splitAllPagesTotal">0 หน้า</strong>
+                  </div>
+                  <div class="summary-row">
+                    <span>ชื่อไฟล์ต้นฉบับ:</span>
+                    <span id="splitOriginalName1" class="text-truncate">-</span>
+                  </div>
+                </div>
+                <div class="split-mode-description">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span>แยกทุกหน้าออกเป็นไฟล์ PDF แยกกัน บรรจุรวมเป็นไฟล์ ZIP</span>
+                </div>
+              </div>
+
+              <!-- Mode 2: Select Pages Panel -->
+              <div class="split-mode-panel" id="splitPanelSelect">
+                <div class="summary-card-box">
+                  <div class="summary-row">
+                    <span id="splitSummaryLabel">หน้าที่เลือก:</span>
+                    <strong id="splitSummarySelected">0 จาก 0 หน้า</strong>
+                  </div>
+                  <div class="summary-row">
+                    <span>ชื่อไฟล์ต้นฉบับ:</span>
+                    <span id="splitOriginalName" class="text-truncate">-</span>
+                  </div>
+                </div>
+
+                <div class="split-select-toolbar" id="splitSelectToolbar">
+                  <div class="split-quick-selection-btns">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btnSplitSelectAll">เลือกทั้งหมด</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btnSplitDeselectAll">ยกเลิกทั้งหมด</button>
+                  </div>
+                  <div class="split-sidebar-range-input">
+                    <label class="setting-label-sm" for="splitRangeInput">เลือกตามช่วงหน้า</label>
+                    <div class="range-input-wrap">
+                      <input type="text" id="splitRangeInput" class="input-text input-sm" placeholder="เช่น 1-3, 5">
+                      <button type="button" class="btn btn-secondary btn-sm" id="btnSplitApplyRange">นำไปใช้</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Mode 3: Ranges Panel (Moved into Sidebar) -->
+              <div class="split-mode-panel hidden" id="splitPanelRanges">
+                <div class="summary-card-box">
+                  <div class="summary-row">
+                    <span>จำนวนช่วง:</span>
+                    <strong id="splitRangesCount">1 ช่วง</strong>
+                  </div>
+                  <div class="summary-row">
+                    <span>ชื่อไฟล์ต้นฉบับ:</span>
+                    <span id="splitOriginalName3" class="text-truncate">-</span>
+                  </div>
+                </div>
+
+                <div class="range-builder-header">
+                  <div>
+                    <h4 class="range-builder-title">กำหนดช่วงหน้า</h4>
+                    <p class="range-builder-desc">ระบุหน้าเริ่มต้นและสิ้นสุดของแต่ละช่วง</p>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btnAddSplitRange">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>+ เพิ่มช่วง</span>
+                  </button>
+                </div>
+
+                <div class="range-rows-container" id="splitRangeRows">
+                  <!-- Dynamically generated range rows -->
+                </div>
+
+                <div class="range-builder-footer">
+                  <div class="range-combine-option">
+                    <label class="checkbox-label" for="splitCombineRanges">
+                      <input type="checkbox" id="splitCombineRanges">
+                      <span>รวมช่วงทั้งหมดไว้ใน PDF ไฟล์เดียว</span>
+                    </label>
+                  </div>
+                  <div class="range-overlap-warning hidden" id="splitOverlapWarning" role="alert">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <span>⚠️ มีช่วงที่ซ้อนกัน ระบบจะไม่เพิ่มหน้าซ้ำในไฟล์ผลลัพธ์</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Output Filename Setting (Common to all modes) -->
               <div class="setting-group">
                 <label class="setting-label" for="splitOutputFilename" id="splitOutputFilenameLabel">ชื่อไฟล์ปลายทาง</label>
                 <div class="filename-input-wrap">
@@ -860,6 +911,7 @@
                 </div>
               </div>
 
+              <!-- Action Box -->
               <div class="action-box">
                 <button type="button" class="btn btn-primary btn-block btn-lg" id="btnExecuteSplit">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="2" y1="13" x2="22" y2="13" stroke-dasharray="3 3"/></svg>

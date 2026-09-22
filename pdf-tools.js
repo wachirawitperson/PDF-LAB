@@ -680,6 +680,7 @@
       const cb = document.getElementById('splitCombineRanges');
       if (cb) cb.checked = false;
       renderSplitUI();
+      setSplitMode('select');
     });
 
     btnSelectAll?.addEventListener('click', () => {
@@ -739,13 +740,28 @@
     btnRanges?.setAttribute('aria-pressed', String(mode === 'ranges'));
 
     const banner = document.getElementById('splitAllPagesBanner');
-    const selectToolbar = document.getElementById('splitSelectToolbar');
-    const grid = document.getElementById('splitThumbnailGrid');
-    const panelRanges = document.getElementById('splitPanelRanges');
+    const rangesBanner = document.getElementById('splitRangesBanner');
+    const workspaceHint = document.getElementById('splitWorkspaceHint');
 
     if (banner) banner.classList.toggle('hidden', mode !== 'all-pages');
-    if (selectToolbar) selectToolbar.classList.toggle('hidden', mode !== 'select');
-    if (grid) grid.classList.toggle('hidden', mode === 'ranges');
+    if (rangesBanner) rangesBanner.classList.toggle('hidden', mode !== 'ranges');
+
+    if (workspaceHint) {
+      if (mode === 'all-pages') {
+        workspaceHint.textContent = 'แสดงตัวอย่างทุกหน้า (แยกออกเป็นไฟล์ละ 1 หน้า)';
+      } else if (mode === 'select') {
+        workspaceHint.textContent = 'คลิกที่หน้าเพื่อเลือกหรือยกเลิกการเลือก';
+      } else if (mode === 'ranges') {
+        workspaceHint.textContent = 'แสดงตัวอย่างหน้าที่ถูกรวมตามช่วงที่กำหนด';
+      }
+    }
+
+    const panelAllPages = document.getElementById('splitPanelAllPages');
+    const panelSelect = document.getElementById('splitPanelSelect');
+    const panelRanges = document.getElementById('splitPanelRanges');
+
+    if (panelAllPages) panelAllPages.classList.toggle('hidden', mode !== 'all-pages');
+    if (panelSelect) panelSelect.classList.toggle('hidden', mode !== 'select');
     if (panelRanges) panelRanges.classList.toggle('hidden', mode !== 'ranges');
 
     if (mode === 'ranges') {
@@ -753,6 +769,7 @@
     }
 
     updateSplitModeUI();
+    updateSplitGridHighlights();
   }
 
   function updateSplitModeUI() {
@@ -763,6 +780,11 @@
     const filenameInput = document.getElementById('splitOutputFilename');
     const extSpan = document.getElementById('splitOutputExt');
     const btnText = document.getElementById('btnExecuteSplitText');
+    const allPagesTotal = document.getElementById('splitAllPagesTotal');
+    const rangesCount = document.getElementById('splitRangesCount');
+
+    if (allPagesTotal) allPagesTotal.textContent = `${splitState.totalPages} หน้า`;
+    if (rangesCount) rangesCount.textContent = `${splitState.ranges.length} ช่วง`;
 
     const baseName = splitState.file ? splitState.file.name.replace(/\.[^/.]+$/, '') : 'document';
     const isCustom = filenameInput?.dataset.autoName === 'custom';
@@ -928,6 +950,7 @@
         }
         checkRangeOverlap();
         updateSplitModeUI();
+        updateSplitGridHighlights();
       };
 
       startInput?.addEventListener('input', onInputChange);
@@ -943,6 +966,7 @@
 
     checkRangeOverlap();
     updateSplitModeUI();
+    updateSplitGridHighlights();
   }
 
   function addRangeRow() {
@@ -1010,6 +1034,9 @@
     const grid = document.getElementById('splitThumbnailGrid');
     const badge = document.getElementById('splitFileBadge');
     const origName = document.getElementById('splitOriginalName');
+    const origName1 = document.getElementById('splitOriginalName1');
+    const origName3 = document.getElementById('splitOriginalName3');
+    const totalAll = document.getElementById('splitAllPagesTotal');
 
     if (!uploadScreen || !workspaceScreen) return;
 
@@ -1025,6 +1052,9 @@
 
     if (badge) badge.textContent = `${splitState.totalPages} หน้า`;
     if (origName) origName.textContent = splitState.file.name;
+    if (origName1) origName1.textContent = splitState.file.name;
+    if (origName3) origName3.textContent = splitState.file.name;
+    if (totalAll) totalAll.textContent = `${splitState.totalPages} หน้า`;
 
     updateSplitSelections();
 
@@ -1043,6 +1073,7 @@
             <div class="page-select-checkbox" aria-label="เลือกหน้า ${i}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
+            <span class="range-badge-pill hidden"></span>
           </div>
           <div class="card-preview-area split-preview-area">
             <div class="page-loading-skeleton">กำลังโหลด...</div>
@@ -1053,12 +1084,14 @@
         `;
 
         const toggle = () => {
-          if (splitState.selectedPages.has(i)) {
-            splitState.selectedPages.delete(i);
-          } else {
-            splitState.selectedPages.add(i);
+          if (splitState.splitMode === 'select') {
+            if (splitState.selectedPages.has(i)) {
+              splitState.selectedPages.delete(i);
+            } else {
+              splitState.selectedPages.add(i);
+            }
+            updateSplitSelections();
           }
-          updateSplitSelections();
         };
 
         card.addEventListener('click', toggle);
@@ -1089,14 +1122,67 @@
     if (summarySelected && splitState.splitMode === 'select') {
       summarySelected.textContent = `เลือกแล้ว ${splitState.selectedPages.size} จาก ${splitState.totalPages} หน้า`;
     }
+    updateSplitGridHighlights();
+  }
 
-    const cards = document.querySelectorAll('#splitThumbnailGrid .page-card-selectable');
-    cards.forEach(card => {
-      const pageNum = parseInt(card.dataset.page, 10);
-      const isSelected = splitState.selectedPages.has(pageNum);
-      card.classList.toggle('selected', isSelected);
-      card.setAttribute('aria-checked', String(isSelected));
-    });
+  function updateSplitGridHighlights() {
+    const grid = document.getElementById('splitThumbnailGrid');
+    if (!grid) return;
+
+    grid.classList.toggle('split-grid-all-pages', splitState.splitMode === 'all-pages');
+    grid.classList.toggle('split-grid-select', splitState.splitMode === 'select');
+    grid.classList.toggle('split-grid-ranges', splitState.splitMode === 'ranges');
+
+    const cards = grid.querySelectorAll('.split-page-card');
+
+    if (splitState.splitMode === 'all-pages') {
+      cards.forEach(card => {
+        card.classList.remove('selected', 'in-range', 'out-of-range');
+        card.setAttribute('aria-checked', 'false');
+        const badge = card.querySelector('.range-badge-pill');
+        if (badge) badge.classList.add('hidden');
+      });
+    } else if (splitState.splitMode === 'select') {
+      cards.forEach(card => {
+        const pageNum = parseInt(card.dataset.page, 10);
+        const isSelected = splitState.selectedPages.has(pageNum);
+        card.classList.remove('in-range', 'out-of-range');
+        card.classList.toggle('selected', isSelected);
+        card.setAttribute('aria-checked', String(isSelected));
+        const badge = card.querySelector('.range-badge-pill');
+        if (badge) badge.classList.add('hidden');
+      });
+    } else if (splitState.splitMode === 'ranges') {
+      const pageToRanges = new Map();
+      splitState.ranges.forEach((range, idx) => {
+        const v = validateRange(range);
+        if (v.valid) {
+          for (let p = range.start; p <= range.end; p++) {
+            if (!pageToRanges.has(p)) pageToRanges.set(p, []);
+            pageToRanges.get(p).push(idx + 1);
+          }
+        }
+      });
+
+      cards.forEach(card => {
+        const pageNum = parseInt(card.dataset.page, 10);
+        const inRanges = pageToRanges.get(pageNum);
+        const badge = card.querySelector('.range-badge-pill');
+
+        if (inRanges && inRanges.length > 0) {
+          card.classList.add('in-range');
+          card.classList.remove('out-of-range', 'selected');
+          if (badge) {
+            badge.textContent = inRanges.length === 1 ? `ช่วง ${inRanges[0]}` : `ช่วง ${inRanges.join(',')}`;
+            badge.classList.remove('hidden');
+          }
+        } else {
+          card.classList.add('out-of-range');
+          card.classList.remove('in-range', 'selected');
+          if (badge) badge.classList.add('hidden');
+        }
+      });
+    }
   }
 
   async function executeSplit() {

@@ -3007,11 +3007,94 @@ select option {
 }
 
 /* Split PDF Workspace & Modes */
+.split-workspace-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.split-sidebar-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.split-sidebar-modes {
+  display: flex;
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
+.split-sidebar-modes .segmented-btn {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 12px;
+  min-height: 40px;
+  text-align: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.split-mode-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.split-mode-description {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.split-mode-description svg {
+  color: var(--accent-amber);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .split-select-toolbar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.split-quick-selection-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.split-sidebar-range-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setting-label-sm {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.split-sidebar-range-input .range-input-wrap {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.split-sidebar-range-input .range-input-wrap .input-sm {
+  flex: 1;
+  max-width: none;
 }
 
 .split-info-banner {
@@ -3028,42 +3111,89 @@ select option {
   margin-bottom: 16px;
 }
 
+/* Workspace Grid Modes */
+.split-grid-all-pages .split-card-header {
+  display: none;
+}
+
+.split-grid-all-pages .split-page-card {
+  cursor: default;
+}
+
+.split-grid-select .page-select-checkbox {
+  display: flex;
+}
+
+.split-grid-select .range-badge-pill {
+  display: none;
+}
+
+.split-grid-ranges .page-select-checkbox {
+  display: none;
+}
+
+.split-grid-ranges .split-page-card {
+  cursor: default;
+  transition: opacity 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.split-grid-ranges .split-page-card.out-of-range {
+  opacity: 0.42;
+  filter: grayscale(0.4);
+}
+
+.split-grid-ranges .split-page-card.in-range {
+  opacity: 1;
+  border-color: var(--accent-amber);
+  box-shadow: 0 0 0 2px var(--accent-amber-glow);
+}
+
+.range-badge-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background-color: var(--accent-amber);
+  color: #0b0d10;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+[data-theme="light"] .range-badge-pill {
+  background-color: #d97706;
+  color: #ffffff;
+}
+
 .split-info-banner svg {
   color: var(--accent-amber);
   flex-shrink: 0;
 }
 
-/* Split Range Builder Panel */
+/* Split Range Builder Panel in Sidebar */
 .split-ranges-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
+  gap: 14px;
 }
 
 .range-builder-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 14px;
+  gap: 8px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-subtle);
-  flex-wrap: wrap;
 }
 
 .range-builder-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .range-builder-desc {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -3071,17 +3201,17 @@ select option {
 .range-rows-container {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .range-row {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--bg-panel);
+  background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 10px 12px;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
@@ -3101,7 +3231,7 @@ select option {
 }
 
 .range-row-num {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -3109,9 +3239,9 @@ select option {
 .btn-range-remove {
   color: #ef4444 !important;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 3px 6px;
   height: auto;
-  min-height: 32px;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3134,35 +3264,35 @@ select option {
 .range-inputs {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .range-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .range-label {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .range-sep {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .range-start-input,
 .range-end-input {
-  width: 90px;
-  padding: 6px 10px;
-  font-size: 13.5px;
+  width: 68px;
+  padding: 5px 8px;
+  font-size: 13px;
   text-align: center;
-  background-color: var(--bg-surface);
+  background-color: var(--bg-panel);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
