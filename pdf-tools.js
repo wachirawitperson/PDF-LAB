@@ -781,14 +781,13 @@
     const grid = document.getElementById('splitThumbnailGrid');
     const rangesPreview = document.getElementById('splitRangesPreview');
 
+    // In ranges mode, keep all pages thumbnail grid visible with live range highlighting
+    if (grid) grid.classList.remove('hidden');
+    if (rangesPreview) rangesPreview.classList.add('hidden');
+
     if (mode === 'ranges') {
-      if (grid) grid.classList.add('hidden');
-      if (rangesPreview) rangesPreview.classList.remove('hidden');
       renderRangeRows();
       renderRangesPreview();
-    } else {
-      if (grid) grid.classList.remove('hidden');
-      if (rangesPreview) rangesPreview.classList.add('hidden');
     }
 
     updateSplitModeUI();
@@ -1029,6 +1028,7 @@
         }
         checkRangeOverlap();
         updateSplitModeUI();
+        updateSplitGridHighlights();
         renderRangesPreview();
       };
 
@@ -1045,6 +1045,7 @@
 
     checkRangeOverlap();
     updateSplitModeUI();
+    updateSplitGridHighlights();
   }
 
   function addRangeRow() {
@@ -1063,6 +1064,7 @@
     renderRangeRows();
     renderRangesPreview();
     updateSplitModeUI();
+    updateSplitGridHighlights();
   }
 
   function removeRangeRow(index) {
@@ -1071,6 +1073,7 @@
     renderRangeRows();
     renderRangesPreview();
     updateSplitModeUI();
+    updateSplitGridHighlights();
   }
 
   function renderRangesPreview() {
@@ -1334,13 +1337,16 @@
           card.classList.add('in-range');
           card.classList.remove('out-of-range', 'selected');
           if (badge) {
-            badge.textContent = inRanges.length === 1 ? `ช่วง ${inRanges[0]}` : `ช่วง ${inRanges.join(',')}`;
-            badge.classList.remove('hidden');
+            badge.textContent = inRanges.length === 1 ? `ช่วงที่ ${inRanges[0]}` : `ช่วงที่ ${inRanges.join(', ')}`;
+            badge.className = 'range-badge-pill in-range-badge';
           }
         } else {
           card.classList.add('out-of-range');
           card.classList.remove('in-range', 'selected');
-          if (badge) badge.classList.add('hidden');
+          if (badge) {
+            badge.textContent = 'ไม่ได้อยู่ในช่วง';
+            badge.className = 'range-badge-pill out-of-range-badge';
+          }
         }
       });
     }
@@ -5181,7 +5187,9 @@
     removeRangeRow,
     renderRangeRows,
     validateRange,
-    checkRangeOverlap
+    checkRangeOverlap,
+    updateSplitModeUI,
+    updateSplitGridHighlights
   };
 
   if (document.readyState === 'loading') {
