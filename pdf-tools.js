@@ -1460,7 +1460,7 @@
     grid.innerHTML = '';
     organizeState.pages.forEach((pageItem, idx) => {
       const card = document.createElement('div');
-      card.className = 'thumb-card';
+      card.className = 'thumb-card organize-page-card';
       card.dataset.id = pageItem.id;
 
       card.innerHTML = `
@@ -1471,14 +1471,14 @@
           </div>
           <div class="card-quick-actions">
             <button type="button" class="card-action-btn btn-rotate-page" title="หมุนหน้า 90°" aria-label="หมุน">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
             </button>
             <button type="button" class="card-action-btn delete-btn btn-delete-page" title="ลบหน้านี้ออก" aria-label="ลบ">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
         </div>
-        <div class="card-preview-area">
+        <div class="card-preview-area organize-preview-area">
           <div class="page-loading-skeleton">กำลังโหลด...</div>
         </div>
       `;

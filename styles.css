@@ -1180,60 +1180,84 @@ button, input, select, textarea {
 
 /* Rotate Button: Always Blue (#2563EB) */
 .card-action-btn.btn-rotate-page,
-.card-action-btn.rotate-btn {
-  color: #2563EB;
-  background-color: rgba(37, 99, 235, 0.10);
-  border: 1px solid rgba(37, 99, 235, 0.20);
+.card-action-btn.rotate-btn,
+[data-theme="light"] .card-action-btn.btn-rotate-page,
+[data-theme="light"] .card-action-btn.rotate-btn {
+  color: #2563eb;
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
 }
 
 .card-action-btn.btn-rotate-page:hover,
-.card-action-btn.rotate-btn:hover {
+.card-action-btn.rotate-btn:hover,
+[data-theme="light"] .card-action-btn.btn-rotate-page:hover,
+[data-theme="light"] .card-action-btn.rotate-btn:hover {
   color: #1d4ed8;
-  background-color: rgba(37, 99, 235, 0.20);
-  border-color: rgba(37, 99, 235, 0.40);
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.25);
+}
+
+.card-action-btn.btn-rotate-page:focus-visible,
+.card-action-btn.rotate-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }
 
 [data-theme="dark"] .card-action-btn.btn-rotate-page,
 [data-theme="dark"] .card-action-btn.rotate-btn {
   color: #60a5fa;
-  background-color: rgba(96, 165, 250, 0.14);
-  border-color: rgba(96, 165, 250, 0.28);
+  background-color: rgba(37, 99, 235, 0.16);
+  border-color: rgba(96, 165, 250, 0.40);
 }
 
 [data-theme="dark"] .card-action-btn.btn-rotate-page:hover,
 [data-theme="dark"] .card-action-btn.rotate-btn:hover {
   color: #93c5fd;
-  background-color: rgba(96, 165, 250, 0.25);
-  border-color: rgba(96, 165, 250, 0.50);
+  background-color: rgba(37, 99, 235, 0.28);
+  border-color: #60a5fa;
+  box-shadow: 0 1px 6px rgba(37, 99, 235, 0.4);
 }
 
 /* Delete Button: Always Red (#DC2626) */
 .card-action-btn.delete-btn,
-.card-action-btn.btn-delete-page {
-  color: #DC2626;
-  background-color: rgba(220, 38, 38, 0.10);
-  border: 1px solid rgba(220, 38, 38, 0.20);
+.card-action-btn.btn-delete-page,
+[data-theme="light"] .card-action-btn.delete-btn,
+[data-theme="light"] .card-action-btn.btn-delete-page {
+  color: #dc2626;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 .card-action-btn.delete-btn:hover,
-.card-action-btn.btn-delete-page:hover {
+.card-action-btn.btn-delete-page:hover,
+[data-theme="light"] .card-action-btn.delete-btn:hover,
+[data-theme="light"] .card-action-btn.btn-delete-page:hover {
   color: #b91c1c;
-  background-color: rgba(220, 38, 38, 0.20);
-  border-color: rgba(220, 38, 38, 0.40);
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.25);
+}
+
+.card-action-btn.delete-btn:focus-visible,
+.card-action-btn.btn-delete-page:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 1px;
 }
 
 [data-theme="dark"] .card-action-btn.delete-btn,
 [data-theme="dark"] .card-action-btn.btn-delete-page {
   color: #f87171;
-  background-color: rgba(248, 113, 113, 0.14);
-  border-color: rgba(248, 113, 113, 0.28);
+  background-color: rgba(220, 38, 38, 0.16);
+  border-color: rgba(248, 113, 113, 0.40);
 }
 
 [data-theme="dark"] .card-action-btn.delete-btn:hover,
 [data-theme="dark"] .card-action-btn.btn-delete-page:hover {
   color: #fca5a5;
-  background-color: rgba(248, 113, 113, 0.25);
-  border-color: rgba(248, 113, 113, 0.50);
+  background-color: rgba(220, 38, 38, 0.28);
+  border-color: #f87171;
+  box-shadow: 0 1px 6px rgba(220, 38, 38, 0.4);
 }
 
 /* Image Preview Box */
@@ -3242,6 +3266,212 @@ select option {
   .range-start-input,
   .range-end-input {
     width: 75px;
+  }
+}
+
+/* ==========================================================================
+   Organize PDF — Refined Card Actions & Workspace Layout
+   ========================================================================== */
+
+#organizeWorkspaceScreen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 0;
+  width: 100%;
+  max-width: 1260px;
+  margin: 0 auto;
+  min-height: calc(100vh - 65px);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+}
+
+#toolOrganizePdf {
+  background-color: var(--bg-workspace);
+}
+
+#organizeWorkspaceScreen .workspace-left {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+#organizeWorkspaceScreen .workspace-toolbar {
+  width: 100%;
+}
+
+#organizeWorkspaceScreen .workspace-right {
+  width: 360px;
+  min-width: 360px;
+  border-left: 1px solid var(--border-subtle);
+  background-color: var(--bg-panel);
+  padding: 24px;
+}
+
+#organizeThumbnailGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 205px));
+  justify-content: center;
+  gap: 16px;
+  padding-bottom: 40px;
+  width: 100%;
+}
+
+/* Organize Page Card */
+.organize-page-card {
+  padding: 8px 8px 10px 8px;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-panel);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+[data-theme="light"] .organize-page-card {
+  background-color: #ffffff;
+}
+
+.organize-page-card .card-top-bar {
+  padding: 2px 2px 4px 2px;
+  min-height: 30px;
+}
+
+.organize-page-card .card-top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.organize-page-card .page-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--accent-amber);
+}
+
+.organize-page-card .card-orig-tag {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.organize-preview-area {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background-color: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px solid var(--border-subtle);
+}
+
+[data-theme="light"] .organize-preview-area {
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.organize-preview-area .card-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-drag: none;
+  user-select: none;
+}
+
+/* Organize Responsive Breakpoints */
+@media (max-width: 1200px) {
+  #organizeWorkspaceScreen {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  #organizeWorkspaceScreen .workspace-right {
+    width: 320px;
+    min-width: 320px;
+    padding: 20px;
+  }
+  #organizeWorkspaceScreen .workspace-left {
+    padding: 20px;
+  }
+  #organizeThumbnailGrid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 195px));
+    gap: 14px;
+  }
+}
+
+@media (max-width: 991px) {
+  #organizeWorkspaceScreen {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+  #organizeWorkspaceScreen .workspace-right {
+    width: 290px;
+    min-width: 290px;
+    padding: 16px;
+  }
+  #organizeWorkspaceScreen .workspace-left {
+    padding: 16px;
+  }
+  #organizeThumbnailGrid {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 175px));
+    gap: 12px;
+  }
+}
+
+@media (max-width: 767px) {
+  #organizeWorkspaceScreen {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  #organizeWorkspaceScreen .workspace-left {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    padding: 14px 12px !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+  }
+  #organizeWorkspaceScreen .workspace-toolbar {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+  }
+  #organizeWorkspaceScreen .workspace-right {
+    width: 100% !important;
+    min-width: 100% !important;
+    border-left: none !important;
+    padding: 16px 12px !important;
+  }
+  #organizeThumbnailGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    padding-bottom: 20px !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+  }
+}
+
+@media (max-width: 350px) {
+  #organizeThumbnailGrid {
+    grid-template-columns: 1fr !important;
   }
 }
 
