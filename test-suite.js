@@ -115,6 +115,73 @@ async function runTests() {
     record('Brand 1: Primary product brand is "PDF LAB"', brandName === 'PDF LAB', `Title: ${brandName}`);
     record('Brand 2: HTML document title reflects "PDF LAB"', pageTitle.includes('PDF LAB'), `Document Title: ${pageTitle}`);
 
+    // =========================================================================
+    // HOMEPAGE / ALL TOOLS LANDING PAGE QA
+    // =========================================================================
+    console.log('\n--- Testing Homepage / All Tools Landing Page ---');
+
+    // 1. Initial view displays Homepage
+    const homeScreenVisible = await page.isVisible('#homeScreen');
+    const heroTitle = await page.$eval('.homepage-title', el => el.textContent.trim());
+    record('Homepage 1: Homepage screen is visible by default on initial load', homeScreenVisible);
+    record('Homepage 2: Homepage hero headline is present', heroTitle.includes('เครื่องมือจัดการ PDF ทั้งหมดในที่เดียว'), `Title: ${heroTitle}`);
+
+    // 2. Filter pills exist and filter tools
+    const pillCount = await page.$$eval('.filter-pill', elms => elms.length);
+    record('Homepage 3: Category filter pills rendered (All + 7 categories)', pillCount === 8, `Pills count: ${pillCount}`);
+
+    // Click 'แปลงไฟล์' pill -> verify only convert cards visible
+    await page.click('.filter-pill[data-category="convert"]');
+    await page.waitForTimeout(100);
+    const hiddenNonConvert = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.homepage-tool-card'));
+      const wrongVisible = cards.some(c => c.dataset.category !== 'convert' && c.style.display !== 'none');
+      const convertVisible = cards.some(c => c.dataset.category === 'convert' && c.style.display !== 'none');
+      return !wrongVisible && convertVisible;
+    });
+    record('Homepage 4: Category filter pill filters tool cards correctly client-side', hiddenNonConvert);
+
+    // Reset to 'ทั้งหมด'
+    await page.click('.filter-pill[data-category="all"]');
+    await page.waitForTimeout(100);
+    const allVisible = await page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.homepage-tool-card'));
+      return cards.every(c => c.style.display !== 'none');
+    });
+    record('Homepage 5: Clicking "ทั้งหมด" pill restores all tool cards', allVisible);
+
+    // 3. Tool Cards count and disabled roadmap state
+    const activeCardCount = await page.$$eval('.homepage-tool-card:not(.is-disabled)', elms => elms.length);
+    const disabledCardCount = await page.$$eval('.homepage-tool-card.is-disabled', elms => elms.length);
+    record('Homepage 6: All 9 active tools present as clickable cards', activeCardCount === 9, `Active: ${activeCardCount}`);
+    record('Homepage 7: Roadmap tools disabled with "เร็ว ๆ นี้" badge', disabledCardCount === 7, `Roadmap: ${disabledCardCount}`);
+
+    // Capture Homepage Visual QA Screenshots
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'homepage_desktop_dark.png'), fullPage: false });
+
+    // Desktop Light Screenshot
+    await page.click('#btnThemeToggle');
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'homepage_desktop_light.png'), fullPage: false });
+    await page.click('#btnThemeToggle'); // restore dark
+    await page.waitForTimeout(150);
+
+    // Mobile Viewport Screenshot
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(150);
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, 'homepage_mobile_390.png'), fullPage: false });
+    await page.setViewportSize({ width: 1440, height: 900 }); // restore desktop
+    await page.waitForTimeout(150);
+
+    // 4. Clicking active tool card opens that tool (IMAGE -> PDF)
+    await page.click('.homepage-tool-card[data-tool-id="image-to-pdf"]');
+    await page.waitForTimeout(150);
+    const uploadVisibleAfterClick = await page.isVisible('#uploadScreen');
+    const homeHiddenAfterClick = await page.evaluate(() => {
+      return document.getElementById('homeScreen').classList.contains('hidden');
+    });
+    record('Homepage 8: Clicking active tool card routes to the tool implementation', uploadVisibleAfterClick && homeHiddenAfterClick);
+
     // --- TOOL 1: IMAGE → PDF (Complete Regression Tests) ---
     const uploadVisible = await page.isVisible('#uploadScreen');
     const workspaceHidden = await page.evaluate(() => {
@@ -1550,8 +1617,13 @@ async function runTests() {
     });
     record('Mega Menu 4: Clicking outside closes mega menu dropdown', outsideClosed);
 
-    // 4. Return to IMAGE -> PDF and verify workspace preserved
+    // 4. Return to Homepage via Brand Click and verify returning to IMAGE -> PDF preserves workspace
     await page.click('.nav-brand');
+    await page.waitForTimeout(100);
+    const atHome = await page.isVisible('#homeScreen');
+    record('Brand Click: Clicking nav-brand returns to Homepage', atHome);
+
+    await page.click('.homepage-tool-card[data-tool-id="image-to-pdf"]');
     await page.waitForTimeout(100);
     const restoredCards = await page.$$eval('#thumbnailGrid .thumb-card', elms => elms.length);
     record('Preservation: Returning to IMAGE → PDF maintains all uploaded images in memory', restoredCards > 0, `Preserved cards: ${restoredCards}`);

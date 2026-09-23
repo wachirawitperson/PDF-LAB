@@ -108,12 +108,13 @@
             <span>จัดหน้า PDF</span>
           </button>
 
-          <!-- Mega Menu: เครื่องมือทั้งหมด ▾ -->
+          <!-- Mega Menu / All Tools: เครื่องมือทั้งหมด ▾ -->
           <div class="nav-dropdown-wrapper nav-mega-wrapper" id="navDropdownWrapper">
             <button 
               type="button" 
               class="nav-tool-item nav-dropdown-btn" 
               id="btnMoreTools" 
+              data-tool-id="home"
               aria-haspopup="dialog" 
               aria-expanded="false" 
               aria-controls="megaMenuDropdown"
@@ -344,9 +345,350 @@
 
     <!-- Main Content Area -->
     <main class="main-content" id="mainContent">
-      
+
+      <!-- STATE 0: Homepage / All Tools Landing Screen -->
+      <section class="homepage-screen" id="homeScreen" aria-labelledby="homepageHeading">
+        <div class="homepage-container">
+          <!-- Hero Section -->
+          <header class="homepage-hero">
+            <div class="homepage-hero-badge">
+              <span class="dot-live"></span>
+              <span>100% Client-Side • ปลอดภัย ข้อมูลไม่รั่วไหล</span>
+            </div>
+            <h1 id="homepageHeading" class="homepage-title">เครื่องมือจัดการ PDF ทั้งหมดในที่เดียว</h1>
+            <p class="homepage-subtitle">รวมทุกเครื่องมือจัดการเอกสาร PDF และรูปภาพเพื่อครูไทย ใช้งานง่าย รวดเร็ว และประมวลผลบนเครื่องของคุณ 100%</p>
+          </header>
+
+          <!-- Category Filter Bar (Pills) -->
+          <nav class="homepage-filter-bar" aria-label="กรองหมวดหมู่เครื่องมือ" role="tablist">
+            <button type="button" class="filter-pill active" data-category="all" role="tab" aria-selected="true">
+              <span>ทั้งหมด</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="organize" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">📄</span>
+              <span>จัดการ PDF</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="convert" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">🔄</span>
+              <span>แปลงไฟล์</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="edit" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">✏️</span>
+              <span>แก้ไข PDF</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="sign" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">✍️</span>
+              <span>เซ็น PDF</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="ocr" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">🔍</span>
+              <span>OCR & ข้อความ</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="security" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">🔒</span>
+              <span>ความปลอดภัย</span>
+            </button>
+            <button type="button" class="filter-pill" data-category="compress" role="tab" aria-selected="false">
+              <span class="pill-icon" aria-hidden="true">🗜️</span>
+              <span>บีบอัดไฟล์</span>
+            </button>
+          </nav>
+
+          <!-- Tools Cards Grid -->
+          <div class="homepage-tools-grid" id="homepageToolsGrid" role="list">
+
+            <!-- Card 1: IMAGE → PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="image-to-pdf" data-category="convert" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-amber">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">IMAGE → PDF</h2>
+                </div>
+                <p class="tool-card-desc">แปลงรูปภาพหลายรูปเป็นไฟล์ PDF คุณภาพสูง พร้อมเลือกขนาดกระดาษและหมุนภาพได้</p>
+              </div>
+            </div>
+
+            <!-- Card 2: รวม PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="merge-pdf" data-category="organize" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-blue">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M8 2h11a2 2 0 0 1 2 2v11"/>
+                  <rect x="3" y="7" width="13" height="13" rx="2"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">รวม PDF</h2>
+                </div>
+                <p class="tool-card-desc">นำไฟล์ PDF หลายไฟล์มารวมเป็นเอกสารเดียว จัดลำดับไฟล์ได้ตามต้องการ</p>
+              </div>
+            </div>
+
+            <!-- Card 3: แยก PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="split-pdf" data-category="organize" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-cyan">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="2" y1="13" x2="22" y2="13" stroke-dasharray="3 3"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">แยก PDF</h2>
+                </div>
+                <p class="tool-card-desc">แยกหน้า PDF ทุกหน้า เลือกเฉพาะหน้าที่ต้องการ หรือแยกเป็นช่วงตามกำหนด</p>
+              </div>
+            </div>
+
+            <!-- Card 4: จัดหน้า PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="organize-pdf" data-category="organize" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-purple">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">จัดหน้า PDF</h2>
+                </div>
+                <p class="tool-card-desc">จัดเรียงลำดับหน้า หมุนองศา ลบหน้าที่ไม่ต้องการ หรือเพิ่มหน้าใหม่ใน PDF</p>
+              </div>
+            </div>
+
+            <!-- Card 5: PDF → รูปภาพ (Active) -->
+            <div class="homepage-tool-card" data-tool-id="pdf-to-image" data-category="convert" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-emerald">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">PDF → รูปภาพ</h2>
+                </div>
+                <p class="tool-card-desc">แยกหน้าเอกสาร PDF ออกมาเป็นภาพ JPG หรือ PNG คุณภาพสูงอย่างคมชัด</p>
+              </div>
+            </div>
+
+            <!-- Card 6: ใส่เลขหน้า (Active) -->
+            <div class="homepage-tool-card" data-tool-id="page-number" data-category="edit" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-indigo">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 19h16"/>
+                  <line x1="10" y1="4" x2="8" y2="20"/>
+                  <line x1="16" y1="4" x2="14" y2="20"/>
+                  <line x1="6" y1="9" x2="18" y2="9"/>
+                  <line x1="6" y1="15" x2="18" y2="15"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">ใส่เลขหน้า</h2>
+                </div>
+                <p class="tool-card-desc">เพิ่มหมายเลขหน้าลงในเอกสาร PDF ระบุตำแหน่ง ฟอนต์ และรูปแบบเลขหน้าได้แม่นยำ</p>
+              </div>
+            </div>
+
+            <!-- Card 7: OCR PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="ocr-pdf" data-category="ocr" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-violet">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 7V4h3"/>
+                  <path d="M20 7V4h-3"/>
+                  <path d="M4 17v3h3"/>
+                  <path d="M20 17v3h-3"/>
+                  <line x1="9" y1="9" x2="15" y2="9"/>
+                  <line x1="12" y1="9" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">OCR PDF</h2>
+                </div>
+                <p class="tool-card-desc">สแกนและแปลงข้อความในภาพหรือ PDF ให้เป็นข้อความที่คัดลอกและค้นหาได้</p>
+              </div>
+            </div>
+
+            <!-- Card 8: บีบอัด PDF (Active) -->
+            <div class="homepage-tool-card" data-tool-id="compress-pdf" data-category="compress" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-rose">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M4 14h6m-6 4h6m8-8V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <polyline points="16 12 12 16 8 12"/>
+                  <line x1="12" y1="16" x2="12" y2="8"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">บีบอัด PDF</h2>
+                </div>
+                <p class="tool-card-desc">ลดขนาดไฟล์ PDF ให้เล็กลง ประหยัดพื้นที่จัดเก็บและส่งต่อง่ายขึ้นบนเครื่อง 100%</p>
+              </div>
+            </div>
+
+            <!-- Card 9: บีบอัดรูปภาพ (Active) -->
+            <div class="homepage-tool-card" data-tool-id="compress-image" data-category="compress" role="listitem" tabindex="0">
+              <div class="tool-card-icon-wrap icon-amber">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <polyline points="16 7 12 11 8 7"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">บีบอัดรูปภาพ</h2>
+                </div>
+                <p class="tool-card-desc">ลดขนาดไฟล์ภาพ JPG, PNG, WebP, HEIC ปรับความละเอียดและคุณภาพได้อย่างยืดหยุ่น</p>
+              </div>
+            </div>
+
+            <!-- Card 10: PDF → Word (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="pdf-to-word" data-category="convert" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">PDF → Word</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">แปลงเอกสาร PDF เป็นไฟล์ Word (DOCX) เพื่อนำไปแก้ไขข้อความต่อได้อย่างสะดวก</p>
+              </div>
+            </div>
+
+            <!-- Card 11: PDF → PowerPoint (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="pdf-to-powerpoint" data-category="convert" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">PDF → PowerPoint</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">แปลงเอกสาร PDF เป็นสไลด์ PowerPoint (PPTX) สำหรับนำไปใช้สอนในห้องเรียน</p>
+              </div>
+            </div>
+
+            <!-- Card 12: PDF → Excel (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="pdf-to-excel" data-category="convert" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="3" y1="9" x2="21" y2="9"/>
+                  <line x1="3" y1="15" x2="21" y2="15"/>
+                  <line x1="9" y1="3" x2="9" y2="21"/>
+                  <line x1="15" y1="3" x2="15" y2="21"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">PDF → Excel</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">ดึงตารางคะแนนและข้อมูลจากเอกสาร PDF ส่งออกเป็นไฟล์สเปรดชีต Excel (XLSX)</p>
+              </div>
+            </div>
+
+            <!-- Card 13: เซ็น PDF (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="sign-pdf" data-category="sign" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+                  <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                  <path d="M2 2l7.586 7.586"/>
+                  <circle cx="11" cy="11" r="2"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">เซ็น PDF</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">เซ็นลายมือชื่ออิเล็กทรอนิกส์ในเอกสาร PDF หรือเพิ่มภาพลายเซ็นได้สะดวก</p>
+              </div>
+            </div>
+
+            <!-- Card 14: ใส่ลายน้ำ (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="watermark-pdf" data-category="edit" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">ใส่ลายน้ำ</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">ประทับตราหรือใส่ข้อความลายน้ำลงในเอกสาร PDF เพื่อป้องกันการคัดลอกผลงานครู</p>
+              </div>
+            </div>
+
+            <!-- Card 15: ครอบตัด PDF (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="crop-pdf" data-category="edit" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M6 2v14a2 2 0 0 0 2 2h14"/>
+                  <path d="M18 22V8a2 2 0 0 0-2-2H2"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">ครอบตัด PDF</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">ครอบตัดส่วนเกินของขอบกระดาษในเอกสาร PDF ปรับขนาดให้เหมาะกับการอ่านบนหน้าจอ</p>
+              </div>
+            </div>
+
+            <!-- Card 16: ตั้งรหัสผ่าน PDF (Roadmap) -->
+            <div class="homepage-tool-card is-disabled" data-tool-id="protect-pdf" data-category="security" role="listitem" tabindex="-1" aria-disabled="true">
+              <div class="tool-card-icon-wrap icon-muted">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div class="tool-card-content">
+                <div class="tool-card-header">
+                  <h2 class="tool-card-title">ใส่รหัสผ่าน PDF</h2>
+                  <span class="tool-badge-soon">เร็ว ๆ นี้</span>
+                </div>
+                <p class="tool-card-desc">เข้ารหัสและใส่รหัสผ่านป้องกันการเปิดอ่านหรือแก้ไขเอกสารสำคัญ</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
       <!-- STATE 1: Initial Upload Screen -->
-      <section class="upload-screen" id="uploadScreen" aria-labelledby="uploadHeading">
+      <section class="upload-screen hidden" id="uploadScreen" aria-labelledby="uploadHeading">
         <div class="upload-card">
           <div class="drop-zone" id="initialDropZone" role="button" tabindex="0" aria-label="คลิกหรือลากรูปภาพมาวางที่นี่เพื่ออัปโหลด">
             <div class="drop-zone-icon-wrapper">

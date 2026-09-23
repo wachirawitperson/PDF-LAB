@@ -126,12 +126,32 @@
       status: 'coming-soon',
       iconSvg: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>',
       desc: 'ดึงตารางคะแนนและข้อมูลจากเอกสาร PDF ส่งออกเป็นไฟล์สเปรดชีต Excel (XLSX)'
+    },
+    'sign-pdf': {
+      id: 'sign-pdf',
+      name: 'เซ็น PDF',
+      status: 'coming-soon',
+      iconSvg: '<path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>',
+      desc: 'เซ็นลายมือชื่ออิเล็กทรอนิกส์ในเอกสาร PDF หรือเพิ่มภาพลายเซ็นได้สะดวก'
+    },
+    'protect-pdf': {
+      id: 'protect-pdf',
+      name: 'ใส่รหัสผ่าน PDF',
+      status: 'coming-soon',
+      iconSvg: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+      desc: 'เข้ารหัสและใส่รหัสผ่านป้องกันการเปิดอ่านหรือแก้ไขเอกสารสำคัญ'
+    },
+    'home': {
+      id: 'home',
+      name: 'เครื่องมือทั้งหมด',
+      status: 'ready',
+      desc: 'รวมทุกเครื่องมือจัดการเอกสาร PDF และรูปภาพเพื่อครูไทย ใช้งานง่าย รวดเร็ว และประมวลผลบนเครื่องของคุณ 100%'
     }
   };
 
   // --- Authoritative Application State ---
   const state = {
-    activeTool: 'image-to-pdf',
+    activeTool: 'home',
     items: [], // Array of { id, file, name, size, type, width, height, rotation, objectUrl, originalBlob }
     selectedIndex: 0,
     settings: {
@@ -155,6 +175,7 @@
     moreToolsMenu: document.getElementById('megaMenuDropdown') || document.getElementById('moreToolsMenu'),
     
     // Screens
+    homeScreen: document.getElementById('homeScreen'),
     uploadScreen: document.getElementById('uploadScreen'),
     workspaceScreen: document.getElementById('workspaceScreen'),
     comingSoonScreen: document.getElementById('comingSoonScreen'),
@@ -222,7 +243,7 @@
     initTheme();
     setupEventListeners();
     setupSortable();
-    syncUI();
+    switchTool(state.activeTool);
   }
 
   // --- Event Listeners ---
@@ -392,13 +413,13 @@
     el.btnCreatePdf.addEventListener('click', generatePdf);
 
     // --- Teacher PDF Lab: Navigation Event Listeners ---
-    // Brand Click (Return to IMAGE -> PDF)
+    // Brand Click (Return to Homepage)
     if (el.navBrand) {
-      el.navBrand.addEventListener('click', () => switchTool('image-to-pdf'));
+      el.navBrand.addEventListener('click', () => switchTool('home'));
       el.navBrand.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          switchTool('image-to-pdf');
+          switchTool('home');
         }
       });
     }
@@ -422,6 +443,48 @@
       btn.addEventListener('click', () => {
         const toolId = btn.dataset.toolId;
         if (toolId) switchTool(toolId);
+      });
+    });
+
+    // --- Homepage Category Filter Pills ---
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const targetCategory = pill.dataset.category || 'all';
+        // Update active tab state
+        document.querySelectorAll('.filter-pill').forEach(p => {
+          const isActive = p === pill;
+          p.classList.toggle('active', isActive);
+          p.setAttribute('aria-selected', String(isActive));
+        });
+
+        // Filter cards in grid
+        document.querySelectorAll('.homepage-tool-card').forEach(card => {
+          const cardCat = card.dataset.category;
+          if (targetCategory === 'all' || cardCat === targetCategory) {
+            card.style.display = '';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    });
+
+    // --- Homepage Tool Cards Navigation ---
+    document.querySelectorAll('.homepage-tool-card').forEach(card => {
+      const toolId = card.dataset.toolId;
+      const isDisabled = card.classList.contains('is-disabled');
+
+      card.addEventListener('click', () => {
+        if (isDisabled) return;
+        if (toolId) switchTool(toolId);
+      });
+
+      card.addEventListener('keydown', (e) => {
+        if (isDisabled) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (toolId) switchTool(toolId);
+        }
       });
     });
 
@@ -723,7 +786,9 @@
     closeMoreToolsDropdown();
 
     const tool = TOOL_REGISTRY[toolId];
-    if (toolId === 'image-to-pdf') {
+    if (toolId === 'home') {
+      document.title = 'PDF LAB | เครื่องมือจัดการ PDF สำหรับครู';
+    } else if (toolId === 'image-to-pdf') {
       document.title = 'IMAGE → PDF | PDF LAB';
     } else {
       document.title = `${tool.name} | PDF LAB`;
@@ -781,6 +846,19 @@
       const elView = document.getElementById(id);
       if (elView) elView.classList.add('hidden');
     });
+
+    // When viewing Homepage (All Tools Directory)
+    if (state.activeTool === 'home') {
+      if (el.homeScreen) el.homeScreen.classList.remove('hidden');
+      el.uploadScreen.classList.add('hidden');
+      el.workspaceScreen.classList.add('hidden');
+      el.headerActions.classList.add('hidden');
+      if (el.comingSoonScreen) el.comingSoonScreen.classList.add('hidden');
+      return;
+    }
+
+    // When viewing any other screen, always hide homepage
+    if (el.homeScreen) el.homeScreen.classList.add('hidden');
 
     // When viewing IMAGE -> PDF
     if (state.activeTool === 'image-to-pdf') {
