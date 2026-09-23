@@ -126,9 +126,24 @@ async function runTests() {
     record('Homepage 1: Homepage screen is visible by default on initial load', homeScreenVisible);
     record('Homepage 2: Homepage hero headline is present', heroTitle.includes('เครื่องมือจัดการ PDF ทั้งหมดในที่เดียว'), `Title: ${heroTitle}`);
 
+    // Brand and Hero Refinement Verifications
+    const brandLabText = await page.$eval('.product-title .brand-lab', el => el.textContent.trim());
+    const heroPdfText = await page.$eval('.homepage-title .hero-pdf', el => el.textContent.trim());
+    const heroBadgeAbsent = (await page.$('.homepage-hero-badge')) === null;
+    const heroSubtitle = await page.$eval('.homepage-subtitle', el => el.textContent.trim());
+    const headerPillPresent = (await page.$('.privacy-pill')) !== null;
+
+    record('Homepage Refine 1: Brand "LAB" is wrapped in .brand-lab', brandLabText === 'LAB');
+    record('Homepage Refine 2: Hero "PDF" is wrapped in .hero-pdf', heroPdfText === 'PDF');
+    record('Homepage Refine 3: Hero security badge is removed', heroBadgeAbsent);
+    record('Homepage Refine 4: Hero subtitle has required exact text', heroSubtitle === 'รวมทุกเครื่องมือจัดการเอกสาร PDF และรูปภาพ ใช้งานง่าย รวดเร็ว');
+    record('Homepage Refine 5: Header privacy pill is preserved', headerPillPresent);
+
     // 2. Filter pills exist and filter tools
     const pillCount = await page.$$eval('.filter-pill', elms => elms.length);
+    const pillSvgCount = await page.$$eval('.filter-pill .pill-icon svg', elms => elms.length);
     record('Homepage 3: Category filter pills rendered (All + 7 categories)', pillCount === 8, `Pills count: ${pillCount}`);
+    record('Homepage Refine 6: All category pills have SVG outline icons', pillSvgCount === 7, `SVGs: ${pillSvgCount}`);
 
     // Click 'แปลงไฟล์' pill -> verify only convert cards visible
     await page.click('.filter-pill[data-category="convert"]');
