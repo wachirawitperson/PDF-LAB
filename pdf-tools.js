@@ -2568,25 +2568,82 @@
     });
   }
 
-  // --- Image Preprocessing for OCR Accuracy ---
-  function preprocessImageForOcr(sourceCanvas) {
+  // =========================================================================
+  // OCR 2.0-A & B: INPUT QUALITY, PREPROCESSING VARIANTS & LAYOUT DETECTION
+  // =========================================================================
+
+  // --- Document Type Detection Heuristic ---
+  function detectDocumentType(stats) {
+    // stats: { width, height, textDensity, regionCount, imageAreaRatio, isMultiColumn }
+    if (!stats) return 'standard_document';
+    const { width, height, regionCount = 0, isInfographicCandidate = false } = stats;
+    const aspect = width / (height || 1);
+
+    if (isInfographicCandidate || (regionCount >= 5 && (aspect < 0.8 || aspect > 1.2))) {
+      return 'infographic_poster';
+    }
+    if (regionCount >= 8) {
+      return 'mixed_visual';
+    }
+    if (stats.isScanned) {
+      return 'scanned_document';
+    }
+    return 'standard_document';
+  }
+
+  // --- High-Resolution DPI Calculator for PDF Pages ---
+  function calculateOcrRenderScale(viewportWidth, viewportHeight) {
+    // Standard PDF 72 DPI base. Target 300 DPI: scale = 300 / 72 = 4.1667
+    // Difficult / small-text target 400 DPI: scale = 400 / 72 = 5.5556
+    // Memory Guard: keep total pixels <= 24 Megapixels to prevent browser crash
+    const maxSafePixels = 24 * 1024 * 1024;
+    const baseScale400 = 400 / 72; // ~5.5556
+    const baseScale300 = 300 / 72; // ~4.1667
+
+    // Try 400 DPI first for smaller/compact documents
+    const pixels400 = (viewportWidth * baseScale400) * (viewportHeight * baseScale400);
+    if (pixels400 <= maxSafePixels && Math.max(viewportWidth, viewportHeight) <= 850) {
+      return { scale: baseScale400, dpi: 400 };
+    }
+
+    // Try 300 DPI for standard pages
+    const pixels300 = (viewportWidth * baseScale300) * (viewportHeight * baseScale300);
+    if (pixels300 <= maxSafePixels) {
+      return { scale: baseScale300, dpi: 300 };
+    }
+
+    // Scale down gracefully if page is unusually large (e.g. engineering blueprint)
+    const safeScale = Math.sqrt(maxSafePixels / (viewportWidth * viewportHeight));
+    const effectiveDpi = Math.round(safeScale * 72);
+    return { scale: safeScale, dpi: Math.max(150, effectiveDpi) };
+  }
+
+  // --- Deterministic High-Quality Image Upscaling ---
+  function upscaleImageIfNeeded(sourceCanvas) {
     const width = sourceCanvas.width;
     const height = sourceCanvas.height;
     if (!width || !height) return sourceCanvas;
 
-    // Normalize resolution for optimal OCR (2000-2800px on long edge)
-    let targetWidth = width;
-    let targetHeight = height;
+    const minDim = Math.min(width, height);
     const maxDim = Math.max(width, height);
-    if (maxDim > 2800) {
-      const scale = 2800 / maxDim;
-      targetWidth = Math.round(width * scale);
-      targetHeight = Math.round(height * scale);
-    } else if (maxDim < 700) {
-      const scale = Math.min(2.5, 1400 / maxDim);
-      targetWidth = Math.round(width * scale);
-      targetHeight = Math.round(height * scale);
+
+    // If already high-resolution (e.g. 1800px+), preserve original dimensions
+    if (minDim >= 1000 || maxDim >= 2200) {
+      return sourceCanvas;
     }
+
+    // Compute deterministic upscale factor (1.5x - 2.5x) to ensure Thai character loophead height >= 25px
+    let scale = 1.0;
+    if (maxDim < 800) {
+      scale = Math.min(3.0, 1800 / maxDim);
+    } else if (minDim < 900) {
+      scale = 1.6;
+    }
+
+    if (scale <= 1.05) return sourceCanvas;
+
+    const targetWidth = Math.round(width * scale);
+    const targetHeight = Math.round(height * scale);
 
     const canvas = document.createElement('canvas');
     canvas.width = targetWidth;
@@ -2595,13 +2652,34 @@
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
+    return canvas;
+  }
 
-    const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+  // --- Variant A: Original High-Resolution (Clone Canvas) ---
+  function createVariantOriginal(sourceCanvas) {
+    const canvas = document.createElement('canvas');
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(sourceCanvas, 0, 0);
+    return canvas;
+  }
+
+  // --- Variant B: Grayscale + 1st-to-99th Percentile Contrast Stretching ---
+  function createVariantGrayscaleContrast(sourceCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(sourceCanvas, 0, 0);
+
+    const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
-    const totalPixels = targetWidth * targetHeight;
-
-    // 1. Grayscale & compute histogram
+    const totalPixels = width * height;
     const histogram = new Uint32Array(256);
+
     for (let i = 0; i < data.length; i += 4) {
       const gray = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
       data[i] = gray;
@@ -2610,32 +2688,29 @@
       histogram[gray]++;
     }
 
-    // 2. Contrast stretching (2nd to 98th percentile)
-    const lowBoundCount = totalPixels * 0.02;
-    const highBoundCount = totalPixels * 0.98;
+    // Gentle 1% to 99% clipping to avoid clipping thin Thai diacritics
+    const lowBound = totalPixels * 0.01;
+    const highBound = totalPixels * 0.99;
     let count = 0;
     let minGray = 0;
     let maxGray = 255;
+
     for (let i = 0; i < 256; i++) {
       count += histogram[i];
-      if (count >= lowBoundCount && minGray === 0) minGray = i;
-      if (count >= highBoundCount) {
+      if (count >= lowBound && minGray === 0) minGray = i;
+      if (count >= highBound) {
         maxGray = i;
         break;
       }
     }
 
     const range = maxGray - minGray;
-    if (range > 20) {
+    if (range > 15) {
       for (let i = 0; i < data.length; i += 4) {
         let val = data[i];
-        if (val <= minGray) {
-          val = 0;
-        } else if (val >= maxGray) {
-          val = 255;
-        } else {
-          val = Math.round(((val - minGray) / range) * 255);
-        }
+        if (val <= minGray) val = 0;
+        else if (val >= maxGray) val = 255;
+        else val = Math.round(((val - minGray) / range) * 255);
         data[i] = val;
         data[i + 1] = val;
         data[i + 2] = val;
@@ -2645,6 +2720,291 @@
     ctx.putImageData(imgData, 0, 0);
     return canvas;
   }
+
+  // --- Variant C: Controlled 3x3 Laplacian Sharpening ---
+  function createVariantSharpened(sourceCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(sourceCanvas, 0, 0);
+
+    const srcData = ctx.getImageData(0, 0, width, height);
+    const src = srcData.data;
+    const outData = ctx.createImageData(width, height);
+    const dst = outData.data;
+
+    // Controlled 3x3 sharpening kernel (center 3.0, edges -0.5)
+    // Normalized sum = 3.0 - 4*(0.5) = 1.0 (preserves baseline luminance)
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = (y * width + x) * 4;
+        const up = ((y - 1) * width + x) * 4;
+        const down = ((y + 1) * width + x) * 4;
+        const left = (y * width + (x - 1)) * 4;
+        const right = (y * width + (x + 1)) * 4;
+
+        for (let c = 0; c < 3; c++) {
+          const val = 3.0 * src[idx + c] - 0.5 * (src[up + c] + src[down + c] + src[left + c] + src[right + c]);
+          dst[idx + c] = Math.max(0, Math.min(255, Math.round(val)));
+        }
+        dst[idx + 3] = src[idx + 3];
+      }
+    }
+
+    ctx.putImageData(outData, 0, 0);
+    return canvas;
+  }
+
+  // --- Variant D: Integral-Image Local Adaptive Thresholding (Binarized) ---
+  function createVariantAdaptiveThreshold(sourceCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(sourceCanvas, 0, 0);
+
+    const imgData = ctx.getImageData(0, 0, width, height);
+    const data = imgData.data;
+
+    // 1. Grayscale array
+    const gray = new Uint8Array(width * height);
+    for (let i = 0, g = 0; i < data.length; i += 4, g++) {
+      gray[g] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+    }
+
+    // 2. Compute 2D Integral Image (summed area table) in O(N)
+    const S = new Float64Array((width + 1) * (height + 1));
+    const sWidth = width + 1;
+
+    for (let y = 0; y < height; y++) {
+      let rowSum = 0;
+      for (let x = 0; x < width; x++) {
+        rowSum += gray[y * width + x];
+        S[(y + 1) * sWidth + (x + 1)] = S[y * sWidth + (x + 1)] + rowSum;
+      }
+    }
+
+    // 3. Local adaptive window: ~1/16th of page width (min 15, max 45)
+    const windowSize = Math.max(15, Math.min(45, Math.round(width / 32) | 1));
+    const halfWin = Math.floor(windowSize / 2);
+    const C = 6; // offset to keep dark text distinct from slightly darker borders
+
+    for (let y = 0; y < height; y++) {
+      const y0 = Math.max(0, y - halfWin);
+      const y1 = Math.min(height, y + halfWin + 1);
+
+      for (let x = 0; x < width; x++) {
+        const x0 = Math.max(0, x - halfWin);
+        const x1 = Math.min(width, x + halfWin + 1);
+        const count = (x1 - x0) * (y1 - y0);
+
+        // Sum from integral image S: (y1, x1) - (y0, x1) - (y1, x0) + (y0, x0)
+        const sum = S[y1 * sWidth + x1] - S[y0 * sWidth + x1] - S[y1 * sWidth + x0] + S[y0 * sWidth + x0];
+        const mean = sum / count;
+        const curVal = gray[y * width + x];
+        const binVal = curVal < (mean - C) ? 0 : 255;
+
+        const idx = (y * width + x) * 4;
+        data[idx] = binVal;
+        data[idx + 1] = binVal;
+        data[idx + 2] = binVal;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
+
+  // --- OCR 2.0 Comprehensive Preprocessor ---
+  function preprocessImageForOcr(sourceCanvas) {
+    if (!sourceCanvas || !sourceCanvas.width || !sourceCanvas.height) return sourceCanvas;
+    const upscaled = upscaleImageIfNeeded(sourceCanvas);
+    return createVariantGrayscaleContrast(upscaled);
+  }
+
+  // --- OCR 2.0-B: Layout & Text-Region Detection Engine ---
+  function detectTextRegions(sourceCanvas) {
+    const width = sourceCanvas.width;
+    const height = sourceCanvas.height;
+    if (!width || !height) return [];
+
+    // Analyze downsampled grid (approx 600-800px on long edge) for high speed & low memory
+    const maxDim = Math.max(width, height);
+    const scale = Math.min(1.0, 750 / maxDim);
+    const sw = Math.round(width * scale);
+    const sh = Math.round(height * scale);
+
+    const smallCanvas = document.createElement('canvas');
+    smallCanvas.width = sw;
+    smallCanvas.height = sh;
+    const sCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
+    sCtx.drawImage(sourceCanvas, 0, 0, sw, sh);
+
+    const imgData = sCtx.getImageData(0, 0, sw, sh);
+    const data = imgData.data;
+
+    // 1. Grayscale & edge magnitude map (Sobel-like gradient)
+    const edges = new Uint8Array(sw * sh);
+    for (let y = 1; y < sh - 1; y++) {
+      for (let x = 1; x < sw - 1; x++) {
+        const idx = (y * sw + x) * 4;
+        const left = (y * sw + (x - 1)) * 4;
+        const right = (y * sw + (x + 1)) * 4;
+        const up = ((y - 1) * sw + x) * 4;
+        const down = ((y + 1) * sw + x) * 4;
+
+        const gX = Math.abs(data[right] - data[left]);
+        const gY = Math.abs(data[down] - data[up]);
+        const mag = Math.min(255, gX + gY);
+        edges[y * sw + x] = mag > 35 ? 255 : 0;
+      }
+    }
+
+    // 2. Horizontal & vertical projection morph to group lines into blocks
+    // Morphological dilation horizontally (text characters connect into lines)
+    const morph = new Uint8Array(sw * sh);
+    const hRadius = Math.max(3, Math.round(sw * 0.015));
+    const vRadius = Math.max(2, Math.round(sh * 0.008));
+
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        if (edges[y * sw + x] === 255) {
+          const x0 = Math.max(0, x - hRadius);
+          const x1 = Math.min(sw, x + hRadius + 1);
+          const y0 = Math.max(0, y - vRadius);
+          const y1 = Math.min(sh, y + vRadius + 1);
+          for (let my = y0; my < y1; my++) {
+            for (let mx = x0; mx < x1; mx++) {
+              morph[my * sw + mx] = 255;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Connected Component Labeling on morph map
+    const visited = new Uint8Array(sw * sh);
+    const regions = [];
+
+    for (let y = 0; y < sh; y += 2) {
+      for (let x = 0; x < sw; x += 2) {
+        if (morph[y * sw + x] === 255 && visited[y * sw + x] === 0) {
+          // Breadth-first flood fill
+          let minX = x, maxX = x, minY = y, maxY = y;
+          let pixelCount = 0;
+          const queue = [x, y];
+          visited[y * sw + x] = 1;
+
+          while (queue.length > 0) {
+            const cy = queue.pop();
+            const cx = queue.pop();
+            pixelCount++;
+
+            if (cx < minX) minX = cx;
+            if (cx > maxX) maxX = cx;
+            if (cy < minY) minY = cy;
+            if (cy > maxY) maxY = cy;
+
+            const neighbors = [
+              [cx + 2, cy], [cx - 2, cy], [cx, cy + 2], [cx, cy - 2]
+            ];
+            for (const [nx, ny] of neighbors) {
+              if (nx >= 0 && nx < sw && ny >= 0 && ny < sh) {
+                const nIdx = ny * sw + nx;
+                if (morph[nIdx] === 255 && visited[nIdx] === 0) {
+                  visited[nIdx] = 1;
+                  queue.push(nx, ny);
+                }
+              }
+            }
+          }
+
+          const rWidth = (maxX - minX + 1);
+          const rHeight = (maxY - minY + 1);
+
+          // Filter out tiny noise specks (< 20px) and pure page-spanning solid banners
+          if (rWidth >= 25 && rHeight >= 12 && pixelCount >= 30) {
+            // Map coordinates back to original high-res canvas scale
+            const origX = Math.max(0, Math.floor(minX / scale));
+            const origY = Math.max(0, Math.floor(minY / scale));
+            const origW = Math.min(width - origX, Math.ceil(rWidth / scale));
+            const origH = Math.min(height - origY, Math.ceil(rHeight / scale));
+
+            // Heuristic Classification
+            let type = 'paragraph';
+            const aspect = origW / (origH || 1);
+            if (origY < height * 0.22 && origW > width * 0.35 && origH < height * 0.18) {
+              type = 'heading';
+            } else if (origH < 50 && origW < 300) {
+              type = 'label';
+            } else if (origW > width * 0.8 && origH > height * 0.5) {
+              type = 'mixed';
+            }
+
+            regions.push({
+              id: `reg-${regions.length + 1}`,
+              type,
+              x: origX,
+              y: origY,
+              width: origW,
+              height: origH,
+              pixelDensity: pixelCount / (rWidth * rHeight)
+            });
+          }
+        }
+      }
+    }
+
+    smallCanvas.width = 0;
+    smallCanvas.height = 0;
+
+    // 4. Merge overlapping or closely adjacent bounding boxes
+    const merged = [];
+    regions.sort((a, b) => a.y - b.y || a.x - b.x);
+
+    for (const r of regions) {
+      let mergedWithExisting = false;
+      for (const m of merged) {
+        const overlapX = Math.max(0, Math.min(r.x + r.width, m.x + m.width) - Math.max(r.x, m.x));
+        const overlapY = Math.max(0, Math.min(r.y + r.height, m.y + m.height) - Math.max(r.y, m.y));
+        const verticalDist = r.y - (m.y + m.height);
+
+        // Merge if overlapping or vertically stacked lines in same column within 20px
+        if ((overlapX > 0 && overlapY > 0) || (overlapX > r.width * 0.6 && verticalDist >= 0 && verticalDist < 25)) {
+          const newX = Math.min(r.x, m.x);
+          const newY = Math.min(r.y, m.y);
+          const newW = Math.max(r.x + r.width, m.x + m.width) - newX;
+          const newH = Math.max(r.y + r.height, m.y + m.height) - newY;
+          m.x = newX;
+          m.y = newY;
+          m.width = newW;
+          m.height = newH;
+          if (r.type === 'heading') m.type = 'heading';
+          mergedWithExisting = true;
+          break;
+        }
+      }
+      if (!mergedWithExisting) merged.push({ ...r });
+    }
+
+    // 5. Reading Order Reconstruction
+    // Natural order: Top header bands first -> Left-to-right columns -> Bottom footer
+    merged.sort((a, b) => {
+      // Group by vertical bands (50px quantization)
+      const bandA = Math.floor(a.y / 80);
+      const bandB = Math.floor(b.y / 80);
+      if (bandA !== bandB) return bandA - bandB;
+      return a.x - b.x;
+    });
+
+    return merged;
+  }
+
 
   // --- Main OCR File / Files Handler ---
   async function handleOcrFiles(fileList) {
@@ -3389,11 +3749,14 @@
         if (progressBarFill) progressBarFill.style.width = `${stepBasePct}%`;
         if (progressPercent) progressPercent.textContent = `${stepBasePct}%`;
 
-        // Acquire canvas for this page
+        // Acquire canvas for this page (OCR 2.0-A: 300/400 DPI rendering & memory guard)
         let originalCanvas = null;
         if (ocrState.isPdf) {
           const pdfPage = await pdfDoc.getPage(pageNum);
-          const viewport = pdfPage.getViewport({ scale: 2.0 });
+          const v1x = pdfPage.getViewport({ scale: 1.0 });
+          const ocrScaleInfo = calculateOcrRenderScale(v1x.width, v1x.height);
+          const ocrScale = (ocrScaleInfo && typeof ocrScaleInfo === 'object' && ocrScaleInfo.scale) ? ocrScaleInfo.scale : (Number(ocrScaleInfo) || 3.0);
+          const viewport = pdfPage.getViewport({ scale: ocrScale });
           originalCanvas = document.createElement('canvas');
           originalCanvas.width = viewport.width;
           originalCanvas.height = viewport.height;
@@ -3409,7 +3772,18 @@
           break;
         }
 
-        // Apply preprocessing if toggled
+        // OCR 2.0-B: Layout & Region Analysis
+        const detectedRegions = detectTextRegions(originalCanvas);
+        const docType = detectDocumentType({
+          width: originalCanvas.width,
+          height: originalCanvas.height,
+          regionCount: detectedRegions.length,
+          isInfographicCandidate: detectedRegions.some(r => r.type === 'heading') && detectedRegions.length >= 3
+        });
+        pageItem.documentType = docType;
+        pageItem.detectedRegions = detectedRegions;
+
+        // Apply preprocessing if toggled (OCR 2.0-A)
         let ocrInputCanvas = originalCanvas;
         let preprocessedCanvas = null;
         if (shouldPreprocess) {
@@ -3431,11 +3805,23 @@
         const quality = evaluateOcrQuality(ret.data);
         const pagePdf = ret.data ? ret.data.pdf : null;
 
+        // OCR 2.0-C: Record region-level confidence and block coordinates
+        const rawBlocks = (ret.data && ret.data.blocks) ? ret.data.blocks : [];
+        const regionsWithConf = rawBlocks.map((b, bIdx) => ({
+          id: `block-${bIdx + 1}`,
+          type: b.blocktype || (b.bbox && (b.bbox.y1 - b.bbox.y0 > 60) ? 'heading' : 'paragraph'),
+          bbox: b.bbox,
+          confidence: Math.round(b.confidence || 0),
+          text: (b.text || '').trim(),
+          linesCount: (b.lines || []).length
+        })).filter(b => b.text.length > 0);
+
         pageItem.qualityStatus = quality.status;
         pageItem.text = quality.text;
         pageItem.confidence = quality.confidence;
         pageItem.suppressedLinesCount = quality.suppressedLinesCount;
         pageItem.tessData = ret.data;
+        pageItem.regions = regionsWithConf.length > 0 ? regionsWithConf : detectedRegions;
 
         if (quality.status === 'LOW') {
           // Do NOT inject low-confidence garbage into invisible text layer
@@ -5179,6 +5565,15 @@
     buildSearchablePdf,
     downloadSearchablePdf,
     preprocessImageForOcr,
+    detectDocumentType,
+    calculateOcrRenderScale,
+    upscaleImageIfNeeded,
+    createVariantOriginal,
+    createVariantGrayscaleContrast,
+    createVariantSharpened,
+    createVariantAdaptiveThreshold,
+    detectTextRegions,
+    evaluateOcrQuality,
     setMergeViewMode,
     renderMergeUI,
     renderOrganizeCards,

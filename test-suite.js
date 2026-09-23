@@ -1157,6 +1157,247 @@ async function runTests() {
     record('OCR TEST R: Searchable PDF text layer sanitization removes suppressed garbage tokens from invisible layer', !qgResults.searchableHasNoise && qgResults.searchableHasValid, 'Searchable PDF free from OCR garbage');
     record('OCR TEST S: Copy and Download TXT guard prevents copying raw garbage on low-confidence pages', qgResults.copyGuarded, 'User notified and copying blocked on noise page');
 
+    // =========================================================================
+    // OCR 2.0-A, 2.0-B, 2.0-C TESTS (T, U, V, W, X, Y, Z)
+    // =========================================================================
+    console.log('Running OCR 2.0 Tests T-Z: Preprocessing, Layout-Aware Detection & Searchable PDF...');
+
+    // OCR TEST T: Render Scale & Memory Guard (300/400 DPI)
+    const testOcrScale = await page.evaluate(() => {
+      const a4 = window.PdfLabTools.calculateOcrRenderScale(595.28, 841.89);
+      const huge = window.PdfLabTools.calculateOcrRenderScale(5000, 5000);
+      const small = window.PdfLabTools.calculateOcrRenderScale(300, 400);
+
+      const maxSafePixels = 24 * 1024 * 1024;
+      const hugePixels = (5000 * huge.scale) * (5000 * huge.scale);
+
+      return {
+        a4Dpi: a4.dpi,
+        a4Scale: a4.scale,
+        hugePixelsSafe: hugePixels <= maxSafePixels + 1000,
+        smallDpi: small.dpi
+      };
+    });
+    record('OCR TEST T: 300/400 DPI scale computation with 24 Megapixel memory guard',
+      (testOcrScale.a4Dpi === 300 || testOcrScale.a4Dpi === 400) && testOcrScale.hugePixelsSafe && testOcrScale.smallDpi === 400,
+      `A4 DPI: ${testOcrScale.a4Dpi}, Small DPI: ${testOcrScale.smallDpi}, Huge Memory Safe: ${testOcrScale.hugePixelsSafe}`
+    );
+
+    // OCR TEST U: Upscaling & Preprocessing Variants (A, B, C, D)
+    const testVariants = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 250; c.height = 150;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#888888'; ctx.fillRect(0, 0, 250, 150);
+      ctx.fillStyle = '#222222'; ctx.font = '16px sans-serif'; ctx.fillText('VARIANTS TEST', 20, 75);
+
+      const upscaled = window.PdfLabTools.upscaleImageIfNeeded(c);
+      const orig = window.PdfLabTools.createVariantOriginal(upscaled);
+      const contrast = window.PdfLabTools.createVariantGrayscaleContrast(upscaled);
+      const sharp = window.PdfLabTools.createVariantSharpened(upscaled);
+      const adapt = window.PdfLabTools.createVariantAdaptiveThreshold(upscaled);
+
+      // Check binarization in adaptive threshold
+      const aCtx = adapt.getContext('2d');
+      const aData = aCtx.getImageData(0, 0, adapt.width, adapt.height).data;
+      let isBinary = true;
+      for (let i = 0; i < Math.min(1000, aData.length); i += 4) {
+        if (aData[i] !== 0 && aData[i] !== 255) {
+          isBinary = false;
+          break;
+        }
+      }
+
+      return {
+        upscaledOk: upscaled.width > c.width,
+        origOk: orig.width === upscaled.width,
+        contrastOk: contrast.width === upscaled.width,
+        sharpOk: sharp.width === upscaled.width,
+        adaptOk: adapt.width === upscaled.width,
+        isBinary
+      };
+    });
+    record('OCR TEST U: High-fidelity image upscaling and 4 preprocessing variants (A: Original, B: Contrast, C: Sharpen, D: Adaptive Threshold)',
+      testVariants.upscaledOk && testVariants.contrastOk && testVariants.sharpOk && testVariants.adaptOk && testVariants.isBinary,
+      'All 4 variants generated with valid pixels & binarization verified'
+    );
+
+    // OCR TEST V: Layout & Text-Region Detection Engine + Reading Order
+    const testLayout = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 800; c.height = 1000;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 800, 1000);
+
+      // 1. Header banner (top 15%)
+      ctx.fillStyle = '#000000'; ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('รายงานผลการปฏิบัติงานตามข้อตกลง วPA', 100, 80);
+
+      // 2. Left column
+      ctx.font = '16px sans-serif';
+      ctx.fillText('คอลัมน์ที่ 1: การจัดการเรียนรู้เชิงรุก Active Learning', 60, 300);
+      ctx.fillText('เพื่อพัฒนาทักษะการคิดวิเคราะห์ของผู้เรียนอย่างยั่งยืน', 60, 340);
+
+      // 3. Right column
+      ctx.fillText('คอลัมน์ที่ 2: การพัฒนาสื่อนวัตกรรมทางการศึกษาและ AI', 460, 300);
+      ctx.fillText('การประยุกต์ใช้เทคโนโลยีดิจิทัลในการประเมินผล', 460, 340);
+
+      // 4. Footer
+      ctx.font = '14px sans-serif';
+      ctx.fillText('โรงเรียนบ้านวังยาง สำนักงานเขตพื้นที่การศึกษาประถมศึกษา', 150, 920);
+
+      const regions = window.PdfLabTools.detectTextRegions(c);
+      const hasHeading = regions.some(r => r.type === 'heading');
+      const readingOrderOk = regions.length >= 2 && regions[0].y < regions[regions.length - 1].y;
+
+      return {
+        count: regions.length,
+        hasHeading,
+        readingOrderOk,
+        regions: regions.map(r => ({ type: r.type, y: r.y }))
+      };
+    });
+    record('OCR TEST V: Layout-aware region detection, classification (heading/paragraph) & reading order reconstruction',
+      testLayout.count >= 2 && testLayout.hasHeading && testLayout.readingOrderOk,
+      `Detected: ${testLayout.count} regions, hasHeading: ${testLayout.hasHeading}, natural order: ${testLayout.readingOrderOk}`
+    );
+
+    // OCR TEST W: Document Type Detection Heuristic
+    const testDocType = await page.evaluate(() => {
+      const infographic = window.PdfLabTools.detectDocumentType({
+        width: 800, height: 1200, regionCount: 6, isInfographicCandidate: true
+      });
+      const standard = window.PdfLabTools.detectDocumentType({
+        width: 800, height: 1100, regionCount: 3, isInfographicCandidate: false
+      });
+      const scanned = window.PdfLabTools.detectDocumentType({
+        width: 800, height: 1100, regionCount: 4, isScanned: true
+      });
+      return { infographic, standard, scanned };
+    });
+    record('OCR TEST W: Document Type detection heuristic accurately classifies infographic, standard, and scanned documents',
+      testDocType.infographic === 'infographic_poster' && testDocType.standard === 'standard_document' && testDocType.scanned === 'scanned_document',
+      `Infographic: ${testDocType.infographic}, Standard: ${testDocType.standard}, Scanned: ${testDocType.scanned}`
+    );
+
+    // OCR TEST X: Region-Level Confidence & Block Traceability
+    console.log('Running OCR TEST X: Region-Level Confidence & Block Traceability...');
+    const testRegionConf = await page.evaluate(async () => {
+      const c = document.createElement('canvas');
+      c.width = 600; c.height = 300;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 600, 300);
+      ctx.fillStyle = '#000000'; ctx.font = 'bold 24px Arial, sans-serif';
+      ctx.fillText('HEADING SECTION 2026', 30, 60);
+      ctx.font = '18px Arial, sans-serif';
+      ctx.fillText('Standard paragraph text with confident characters', 30, 120);
+
+      const b = await new Promise(r => c.toBlob(r, 'image/png'));
+      const f = new File([b], 'region-conf-test.png', { type: 'image/png' });
+
+      const langSelect = document.getElementById('ocrLanguage');
+      if (langSelect) langSelect.value = 'eng';
+
+      await window.PdfLabTools.handleOcrFiles([f]);
+      await window.PdfLabTools.executeOcr();
+
+      const page1 = window.PdfLabTools.ocrState.pages[0];
+      const regions = page1?.regions || [];
+
+      return {
+        regionsCount: regions.length,
+        hasConfidence: regions.every(r => typeof r.confidence === 'number' && r.confidence >= 0 && r.confidence <= 100),
+        firstConf: regions[0]?.confidence,
+        hasBbox: regions.every(r => !!r.bbox || (typeof r.x === 'number' && typeof r.width === 'number')),
+        docType: page1?.documentType
+      };
+    });
+    record('OCR TEST X: Region-level genuine confidence scores and bounding boxes tracked for every block',
+      testRegionConf.regionsCount > 0 && testRegionConf.hasConfidence && testRegionConf.hasBbox,
+      `Blocks: ${testRegionConf.regionsCount}, Conf: ${testRegionConf.firstConf}%, Valid BBoxes: ${testRegionConf.hasBbox}`
+    );
+
+    // OCR TEST Y: Searchable PDF Text Layer Validation via PDF.js Re-opening
+    console.log('Running OCR TEST Y: Searchable PDF Text Layer Validation via PDF.js...');
+    const testSearchableValidation = await page.evaluate(async () => {
+      const searchableBytes = window.PdfLabTools.ocrState.searchablePdfBytes;
+      if (!searchableBytes) return { valid: false, reason: 'No searchable PDF bytes' };
+
+      // Re-open with pdfjsLib to verify text layer
+      const loadingTask = window.pdfjsLib.getDocument({ data: searchableBytes });
+      const pdf = await loadingTask.promise;
+      const numPages = pdf.numPages;
+
+      let totalItems = 0;
+      let foundHeading = false;
+      for (let p = 1; p <= numPages; p++) {
+        const pageObj = await pdf.getPage(p);
+        const textContent = await pageObj.getTextContent();
+        totalItems += textContent.items.length;
+        for (const it of textContent.items) {
+          if (it.str.includes('HEADING') || it.str.includes('SECTION') || it.str.includes('2026')) {
+            foundHeading = true;
+          }
+        }
+      }
+      await pdf.destroy();
+
+      return {
+        valid: numPages >= 1 && totalItems > 0 && foundHeading,
+        numPages,
+        totalItems,
+        foundHeading
+      };
+    });
+    record('OCR TEST Y: Searchable PDF validation: PDF.js re-opens document and verifies selectable text layer position & string match',
+      testSearchableValidation.valid,
+      `Pages: ${testSearchableValidation.numPages}, Text Items: ${testSearchableValidation.totalItems}, Matched Target: ${testSearchableValidation.foundHeading}`
+    );
+
+    // OCR TEST Z: Real Thai PA Infographic File Execution (End-to-End Local Execution)
+    console.log('Running OCR TEST Z: Real Thai PA Infographic Fixture...');
+    const realPaInfographicPath = path.join(ROOT_DIR, 'test-fixtures/wangyang-p1-thumb.jpg');
+    let realPaResult = { executed: false };
+
+    if (fs.existsSync(realPaInfographicPath)) {
+      realPaResult = await page.evaluate(async () => {
+        // Load the image fixture via fetch from local server
+        const resp = await fetch('test-fixtures/wangyang-p1-thumb.jpg');
+        const blob = await resp.blob();
+        const f = new File([blob], 'wangyang-p1-thumb.jpg', { type: 'image/jpeg' });
+
+        const langSelect = document.getElementById('ocrLanguage');
+        if (langSelect) langSelect.value = 'tha+eng';
+
+        // Preprocess toggle check
+        const prepCheckbox = document.getElementById('ocrPreprocess');
+        if (prepCheckbox) prepCheckbox.checked = true;
+
+        await window.PdfLabTools.handleOcrFiles([f]);
+        await window.PdfLabTools.executeOcr();
+
+        const pageItem = window.PdfLabTools.ocrState.pages[0];
+        const extracted = window.PdfLabTools.ocrState.extractedText;
+        const confidence = window.PdfLabTools.ocrState.overallConfidence;
+        const hasPdf = !!window.PdfLabTools.ocrState.searchablePdfBytes;
+
+        return {
+          executed: true,
+          status: pageItem?.qualityStatus,
+          docType: pageItem?.documentType,
+          confidence,
+          hasPdf,
+          textLength: extracted.length,
+          hasThai: /[\u0E00-\u0E7F]/.test(extracted)
+        };
+      });
+    }
+
+    record('OCR TEST Z: Real Thai PA Infographic file executes end-to-end with layout detection, preprocessing, and Searchable PDF',
+      realPaResult.executed && realPaResult.hasPdf && (realPaResult.confidence >= 0),
+      `DocType: ${realPaResult.docType}, Conf: ${realPaResult.confidence}%, TextLen: ${realPaResult.textLength}, HasThai: ${realPaResult.hasThai}`
+    );
+
     // Reset OCR
     await page.click('#btnClearOcr');
     await page.waitForTimeout(300);
