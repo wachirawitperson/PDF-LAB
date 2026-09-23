@@ -523,11 +523,11 @@
 
   // --- Theme Management ---
   function getEffectiveTheme() {
-    return document.documentElement.getAttribute('data-theme') || 'dark';
+    return document.documentElement.getAttribute('data-theme') || 'light';
   }
 
   function applyTheme(theme) {
-    const validTheme = theme === 'light' ? 'light' : 'dark';
+    const validTheme = theme === 'dark' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', validTheme);
     try {
       localStorage.setItem('pdf-lab-theme', validTheme);
@@ -549,9 +549,9 @@
   }
 
   function initTheme() {
-    let saved = 'dark';
+    let saved = 'light';
     try {
-      saved = localStorage.getItem('pdf-lab-theme') || 'dark';
+      saved = localStorage.getItem('pdf-lab-theme') || 'light';
     } catch (_) {}
     applyTheme(saved);
   }

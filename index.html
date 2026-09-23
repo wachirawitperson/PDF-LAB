@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="th" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,13 +17,13 @@
     (function() {
       try {
         var theme = localStorage.getItem('pdf-lab-theme');
-        if (theme === 'light') {
-          document.documentElement.setAttribute('data-theme', 'light');
-        } else {
+        if (theme === 'dark') {
           document.documentElement.setAttribute('data-theme', 'dark');
+        } else {
+          document.documentElement.setAttribute('data-theme', 'light');
         }
       } catch (e) {
-        document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-theme', 'light');
       }
     })();
   </script>
@@ -330,9 +330,9 @@
           type="button" 
           class="theme-toggle-btn" 
           id="btnThemeToggle" 
-          aria-label="เปลี่ยนเป็นโหมดสว่าง" 
-          title="เปลี่ยนเป็นโหมดสว่าง (สลับโหมดมืด/สว่าง)"
-          aria-pressed="false"
+          aria-label="เปลี่ยนเป็นโหมดมืด" 
+          title="เปลี่ยนเป็นโหมดมืด (สลับโหมดมืด/สว่าง)"
+          aria-pressed="true"
         >
           <span class="theme-icon-wrap icon-sun" aria-hidden="true">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
